@@ -178,6 +178,8 @@ lib/
     goals/
       screens/goals_screen.dart
       providers/goals_provider.dart
+    challenges/
+      widgets/challenges_section.dart  ← challenges live inside goals screen as a section, not a separate tab. Access via goals tab → scroll down.
     ai/
       screens/purchase_advisor_screen.dart  ← main AI tab
       screens/chat_screen.dart              ← push route from advisor (/chat)

@@ -1,8 +1,13 @@
+import 'dart:io';
+
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../../core/theme/app_theme.dart';
+import '../../expenses/screens/expenses_screen.dart';
 
 // Mock data
 const double mockBudget = 3000;
@@ -36,13 +41,34 @@ const Map<int, double> mockCalendarData = {
   27: 0, 28: 0, 29: 0, 30: 0, 31: 0,
 };
 
+Future<void> _exportCsv() async {
+  final buffer = StringBuffer();
+  buffer.writeln('date,time,tag,category,amount');
+  for (final e in mockExpenses) {
+    final amount = (e['amount'] as double).toStringAsFixed(2);
+    buffer.writeln(
+        '${e['date']},${e['time']},${e['tag']},${e['category']},$amount');
+  }
+
+  final dir = await getTemporaryDirectory();
+  final shareDir = Directory('${dir.path}/share_plus');
+  if (!await shareDir.exists()) await shareDir.create();
+  final file = File('${shareDir.path}/clutch_expenses.csv');
+  await file.writeAsString(buffer.toString());
+
+  await Share.shareXFiles(
+    [XFile(file.path, mimeType: 'text/csv')],
+    subject: 'Clutch Expenses — March 2026',
+  );
+}
+
 class AnalyticsScreen extends ConsumerWidget {
   const AnalyticsScreen({super.key});
 
   Color _heatColor(double spend, ColorScheme cs) {
     if (spend == 0) return cs.surfaceContainer;
     if (spend < 100) return cs.primaryContainer;
-    if (spend < 200) return cs.primary.withOpacity(0.6);
+    if (spend < 200) return cs.primary.withValues(alpha: 0.6);
     return cs.primary;
   }
 
@@ -74,7 +100,7 @@ class AnalyticsScreen extends ConsumerWidget {
                   IconButton(
                     icon: const Icon(Icons.ios_share_rounded),
                     color: cs.onSurfaceVariant,
-                    onPressed: () => print('export CSV'),
+                    onPressed: () => _exportCsv(),
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints(),
                   ),
@@ -200,14 +226,14 @@ class AnalyticsScreen extends ConsumerWidget {
                             Text(
                               'spent',
                               style: tt.bodySmall?.copyWith(
-                                color: cs.onPrimaryContainer.withOpacity(0.8),
+                                color: cs.onPrimaryContainer.withValues(alpha: 0.8),
                               ),
                             ),
                             const SizedBox(height: 8),
                             Text(
                               '22.33% of budget',
                               style: tt.labelSmall?.copyWith(
-                                color: cs.onPrimaryContainer.withOpacity(0.7),
+                                color: cs.onPrimaryContainer.withValues(alpha: 0.7),
                               ),
                             ),
                           ],
@@ -295,7 +321,7 @@ class AnalyticsScreen extends ConsumerWidget {
                             Text(
                               'minimum spend',
                               style: tt.labelSmall?.copyWith(
-                                color: cs.onSecondaryContainer.withOpacity(0.8),
+                                color: cs.onSecondaryContainer.withValues(alpha: 0.8),
                               ),
                             ),
                             const SizedBox(height: 8),
@@ -349,7 +375,7 @@ class AnalyticsScreen extends ConsumerWidget {
                             Text(
                               'maximum spend',
                               style: tt.labelSmall?.copyWith(
-                                color: cs.onTertiaryContainer.withOpacity(0.8),
+                                color: cs.onTertiaryContainer.withValues(alpha: 0.8),
                               ),
                             ),
                             const SizedBox(height: 8),
@@ -388,7 +414,7 @@ class AnalyticsScreen extends ConsumerWidget {
 
               // CARD 4 — Total spending (tappable)
               GestureDetector(
-                onTap: () => print('go to expenses'),
+                onTap: () => debugPrint('go to expenses'),
                 child: Container(
                   width: double.infinity,
                   padding: const EdgeInsets.symmetric(

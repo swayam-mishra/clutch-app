@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/app_theme.dart';
+import '../../challenges/widgets/challenges_section.dart';
 
 final List<Map<String, dynamic>> mockGoals = [
   {
@@ -239,7 +240,11 @@ class GoalsScreen extends ConsumerWidget {
                 featured: false,
               ),
 
-              const SizedBox(height: 100),
+              const SizedBox(height: 24),
+              Divider(color: cs.outlineVariant),
+              const SizedBox(height: 8),
+
+              const ChallengesSection(),
             ],
           ),
         ),

@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../settings/providers/settings_provider.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
@@ -12,6 +13,8 @@ class HomeScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
+    final settings = ref.watch(settingsNotifierProvider);
+    final firstName = settings.name.split(' ').first.toLowerCase();
 
     return Scaffold(
       backgroundColor: AppTheme.background,
@@ -20,9 +23,35 @@ class HomeScreen extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Top bar — greeting + settings
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 8, 0),
+                child: Row(
+                  children: [
+                    Text(
+                      'hi, $firstName',
+                      style: textTheme.titleMedium?.copyWith(
+                        color: colorScheme.onSurface,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const Spacer(),
+                    IconButton(
+                      onPressed: () =>
+                          context.push(AppConstants.routeSettings),
+                      icon: const Icon(Icons.settings_rounded, size: 22),
+                      visualDensity: VisualDensity.compact,
+                      style: IconButton.styleFrom(
+                        foregroundColor: colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
               // 1. "For today" header
               Container(
-                margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
                 decoration: BoxDecoration(
                   color: colorScheme.surfaceContainerLow,
@@ -234,7 +263,12 @@ class HomeScreen extends ConsumerWidget {
                 ),
               ),
 
-              // 6. Spacing
+              // 6. Health score card
+              const SizedBox(height: 8),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: const _HealthScoreCard(),
+              ),
               const SizedBox(height: 16),
 
               // 7. "today's expenses" section header
@@ -316,6 +350,144 @@ class HomeScreen extends ConsumerWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _HealthScoreCard extends StatelessWidget {
+  const _HealthScoreCard();
+
+  static const int _score = 82;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+
+    final Color progressColor;
+    final Color statusBg;
+    final Color statusOn;
+    final String statusLabel;
+
+    if (_score >= 80) {
+      progressColor = cs.primary;
+      statusBg = cs.primaryContainer;
+      statusOn = cs.onPrimaryContainer;
+      statusLabel = 'doing well';
+    } else if (_score >= 60) {
+      progressColor = cs.tertiary;
+      statusBg = cs.tertiaryContainer;
+      statusOn = cs.onTertiaryContainer;
+      statusLabel = 'watch out';
+    } else {
+      progressColor = cs.error;
+      statusBg = cs.errorContainer;
+      statusOn = cs.onErrorContainer;
+      statusLabel = 'off track';
+    }
+
+    return GestureDetector(
+      onTap: () => context.push(AppConstants.routeHealthScore),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: cs.surfaceContainerHigh,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Text(
+                  'health score',
+                  style: tt.labelMedium?.copyWith(color: cs.onSurfaceVariant),
+                ),
+                const Spacer(),
+                Text(
+                  '$_score',
+                  style: tt.titleLarge?.copyWith(
+                    color: cs.onSurface,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                Text(
+                  ' / 100',
+                  style: tt.labelSmall?.copyWith(color: cs.onSurfaceVariant),
+                ),
+                const SizedBox(width: 4),
+                Icon(
+                  Icons.chevron_right_rounded,
+                  size: 18,
+                  color: cs.onSurfaceVariant,
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            LinearProgressIndicator(
+              value: _score / 100,
+              backgroundColor: cs.surfaceContainerHighest,
+              valueColor: AlwaysStoppedAnimation<Color>(progressColor),
+              minHeight: 6,
+              borderRadius: BorderRadius.circular(4),
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: statusBg,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    statusLabel,
+                    style: tt.labelSmall?.copyWith(
+                      color: statusOn,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                const Spacer(),
+                _FactorDot(label: 'adherence', color: cs.primary),
+                const SizedBox(width: 12),
+                _FactorDot(label: 'velocity', color: cs.tertiary),
+                const SizedBox(width: 12),
+                _FactorDot(label: 'streak', color: cs.primary),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _FactorDot extends StatelessWidget {
+  const _FactorDot({required this.label, required this.color});
+
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 6,
+          height: 6,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: 4),
+        Text(
+          label,
+          style: tt.labelSmall?.copyWith(color: cs.onSurfaceVariant),
+        ),
+      ],
     );
   }
 }

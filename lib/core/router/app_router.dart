@@ -7,6 +7,8 @@ import '../../features/auth/screens/login_screen.dart';
 import '../../features/auth/screens/signup_screen.dart';
 import '../../features/budget/screens/budget_setup_screen.dart';
 import '../../features/home/screens/main_shell.dart';
+import '../../features/health/screens/health_score_screen.dart';
+import '../../features/settings/screens/settings_screen.dart';
 import '../constants/app_constants.dart';
 
 part 'app_router.g.dart';
@@ -42,6 +44,14 @@ GoRouter appRouter(AppRouterRef ref) {
       GoRoute(
         path: AppConstants.routeChat,
         builder: (context, state) => const ChatScreen(),
+      ),
+      GoRoute(
+        path: AppConstants.routeSettings,
+        builder: (context, state) => const SettingsScreen(),
+      ),
+      GoRoute(
+        path: AppConstants.routeHealthScore,
+        builder: (context, state) => const HealthScoreScreen(),
       ),
     ],
   );
