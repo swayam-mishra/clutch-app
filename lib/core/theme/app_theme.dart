@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 class AppTheme {
   // Color constants — Material Theme Builder dark scheme
@@ -14,27 +13,6 @@ class AppTheme {
   static const Color success       = Color(0xFF88D6BB); // reuse primary
   static const Color warning       = Color(0xFFFFB800);
   static const Color divider       = Color(0xFF252B29); // surfaceContainerHigh
-
-  // Space Grotesk text theme — unchanged
-  static TextTheme get _textTheme => GoogleFonts.spaceGroteskTextTheme(
-        const TextTheme(
-          displayLarge:  TextStyle(fontSize: 36, fontWeight: FontWeight.w700, color: textPrimary),
-          displayMedium: TextStyle(fontSize: 28, fontWeight: FontWeight.w700, color: textPrimary),
-          displaySmall:  TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: textPrimary),
-          headlineLarge:  TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: textPrimary),
-          headlineMedium: TextStyle(fontSize: 18, fontWeight: FontWeight.w500, color: textPrimary),
-          headlineSmall:  TextStyle(fontSize: 16, fontWeight: FontWeight.w500, color: textPrimary),
-          titleLarge:  TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: textPrimary),
-          titleMedium: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: textPrimary),
-          titleSmall:  TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: textPrimary),
-          bodyLarge:  TextStyle(fontSize: 15, fontWeight: FontWeight.w400, color: textPrimary),
-          bodyMedium: TextStyle(fontSize: 14, fontWeight: FontWeight.w400, color: textPrimary),
-          bodySmall:  TextStyle(fontSize: 12, fontWeight: FontWeight.w400, color: textSecondary),
-          labelLarge:  TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: textPrimary),
-          labelMedium: TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: textSecondary),
-          labelSmall:  TextStyle(fontSize: 10, fontWeight: FontWeight.w400, color: textSecondary),
-        ),
-      );
 
   // Material Theme Builder — dark scheme
   static const ColorScheme _colorScheme = ColorScheme(
@@ -72,17 +50,19 @@ class AppTheme {
         useMaterial3:            true,
         colorScheme:             _colorScheme,
         scaffoldBackgroundColor: background,
-        textTheme:               _textTheme,
 
         // AppBar
-        appBarTheme: AppBarTheme(
+        appBarTheme: const AppBarTheme(
           backgroundColor:        background,
           foregroundColor:        textPrimary,
           elevation:              0,
-          scrolledUnderElevation: 0,
+          scrolledUnderElevation: 2,
           centerTitle:            true,
-          titleTextStyle: GoogleFonts.spaceGrotesk(
-            fontSize: 16, fontWeight: FontWeight.w600, color: textPrimary,
+          titleTextStyle: TextStyle(
+            fontSize: 22,
+            fontWeight: FontWeight.w500,
+            letterSpacing: 0,
+            color: textPrimary,
           ),
         ),
 
@@ -97,22 +77,22 @@ class AppTheme {
         ),
 
         // Input fields — M3 medium shape token = 12px (flat/borderless style)
-        inputDecorationTheme: InputDecorationTheme(
+        inputDecorationTheme: const InputDecorationTheme(
           filled:    true,
           fillColor: surface,
-          border: const OutlineInputBorder(
+          border: OutlineInputBorder(
             borderRadius: BorderRadius.all(Radius.circular(12)),
             borderSide:   BorderSide.none,
           ),
-          enabledBorder: const OutlineInputBorder(
+          enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.all(Radius.circular(12)),
             borderSide:   BorderSide.none,
           ),
-          focusedBorder: const OutlineInputBorder(
+          focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.all(Radius.circular(12)),
             borderSide:   BorderSide.none,
           ),
-          errorBorder: const OutlineInputBorder(
+          errorBorder: OutlineInputBorder(
             borderRadius: BorderRadius.all(Radius.circular(12)),
             borderSide:   BorderSide(color: error, width: 1),
           ),
@@ -134,7 +114,11 @@ class AppTheme {
               ),
             ),
             textStyle: WidgetStateProperty.all(
-              GoogleFonts.spaceGrotesk(fontSize: 15, fontWeight: FontWeight.w700),
+              const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                letterSpacing: 0.1,
+              ),
             ),
           ),
         ),
@@ -143,7 +127,7 @@ class AppTheme {
         textButtonTheme: TextButtonThemeData(
           style: TextButton.styleFrom(
             foregroundColor: accent,
-            textStyle: GoogleFonts.spaceGrotesk(
+            textStyle: const TextStyle(
               fontSize: 13, fontWeight: FontWeight.w500,
             ),
           ),
@@ -161,16 +145,17 @@ class AppTheme {
           }),
           labelTextStyle: WidgetStateProperty.resolveWith((states) {
             if (states.contains(WidgetState.selected)) {
-              return GoogleFonts.spaceGrotesk(
+              return const TextStyle(
                 fontSize: 11, fontWeight: FontWeight.w600, color: accent,
               );
             }
-            return GoogleFonts.spaceGrotesk(
+            return const TextStyle(
               fontSize: 11, fontWeight: FontWeight.w400, color: textSecondary,
             );
           }),
-          elevation: 0,
-          height:    64,
+          elevation:   2,
+          shadowColor: const Color(0xFF000000), // colorScheme.shadow
+          height:      64,
         ),
 
         // Bottom sheet — M3 extra-large shape token = 28px top corners
@@ -190,24 +175,30 @@ class AppTheme {
         ),
 
         // Chip — M3 small shape token = 8px
-        chipTheme: ChipThemeData(
+        chipTheme: const ChipThemeData(
           backgroundColor: card,
-          labelStyle: GoogleFonts.spaceGrotesk(
-            fontSize: 12, color: textPrimary,
-          ),
+          labelStyle: TextStyle(fontSize: 12, color: textPrimary),
           side:  BorderSide.none,
-          shape: const RoundedRectangleBorder(
+          shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.all(Radius.circular(8)),
           ),
         ),
 
-        // Snackbar — M3 extra-small shape token = 4px
-        snackBarTheme: SnackBarThemeData(
+        // Dialog — M3 extra-large shape token = 28px
+        dialogTheme: const DialogThemeData(
+          elevation: 6,
+          shadowColor: Color(0xFF000000), // colorScheme.shadow
           backgroundColor: card,
-          contentTextStyle: GoogleFonts.spaceGrotesk(
-            fontSize: 13, color: textPrimary,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.all(Radius.circular(28)),
           ),
-          shape: const RoundedRectangleBorder(
+        ),
+
+        // Snackbar — M3 extra-small shape token = 4px
+        snackBarTheme: const SnackBarThemeData(
+          backgroundColor: card,
+          contentTextStyle: TextStyle(fontSize: 13, color: textPrimary),
+          shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.all(Radius.circular(4)),
           ),
           behavior: SnackBarBehavior.floating,

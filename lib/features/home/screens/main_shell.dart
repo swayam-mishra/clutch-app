@@ -39,11 +39,16 @@ class _MainShellState extends State<MainShell> {
           context: context,
           isScrollControlled: true,
           backgroundColor: Colors.transparent,
+          barrierColor: colorScheme.scrim.withValues(alpha: 0.32),
           builder: (ctx) => const AddExpenseSheet(),
         ),
         backgroundColor: colorScheme.primary,
         foregroundColor: colorScheme.onPrimary,
-        shape: RoundedRectangleBorder(
+        elevation: 6,
+        focusElevation: 8,
+        hoverElevation: 8,
+        highlightElevation: 12,
+        shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.all(Radius.circular(16)),
         ),
         child: const Icon(Icons.add_rounded),

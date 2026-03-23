@@ -143,6 +143,12 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
               // 15. Create account button — M3 FilledButton, primary action
               FilledButton(
                 onPressed: () => print('signup tapped'),
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size(double.infinity, 52),
+                  shape: const RoundedRectangleBorder(
+                    borderRadius: BorderRadius.all(Radius.circular(16)),
+                  ),
+                ),
                 child: const Text('create account'),
               ),
 

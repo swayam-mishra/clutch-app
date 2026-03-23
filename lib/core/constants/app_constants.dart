@@ -20,4 +20,5 @@ abstract final class AppConstants {
   static const String routeAnalytics = '/analytics';
   static const String routeGoals = '/goals';
   static const String routePurchaseAdvisor = '/purchase-advisor';
+  static const String routeChat = '/chat';
 }

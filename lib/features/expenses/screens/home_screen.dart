@@ -311,7 +311,7 @@ class HomeScreen extends ConsumerWidget {
               ),
 
               // 9. Bottom spacing for FAB
-              const SizedBox(height: 80),
+              const SizedBox(height: 120),
             ],
           ),
         ),

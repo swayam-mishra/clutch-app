@@ -23,6 +23,7 @@
 | Formatting | intl |
 | Code gen | build_runner + riverpod_generator |
 | Lint | custom_lint + riverpod_lint |
+| Charts | fl_chart |
 
 Run after any change to files with `part '*.g.dart'`:
 ```bash
@@ -94,27 +95,9 @@ dart run build_runner build --delete-conflicting-outputs
 
 ### Typography
 
-Font: **Space Grotesk** via `GoogleFonts.spaceGroteskTextTheme`.
+Typeface: default M3 (Roboto on Android). No custom font — Flutter M3 handles the full type scale automatically. Never import `google_fonts` in theme files.
 
-Always use `Theme.of(context).textTheme.*` in screens. Never hardcode font sizes except for the `clutch` wordmark.
-
-| Style | Size | Weight |
-|---|---|---|
-| displayLarge | 36 | w700 |
-| displayMedium | 28 | w700 |
-| displaySmall | 22 | w700 |
-| headlineLarge | 20 | w700 |
-| headlineMedium | 18 | w500 |
-| headlineSmall | 16 | w500 |
-| titleLarge | 15 | w600 |
-| titleMedium | 14 | w500 |
-| titleSmall | 13 | w500 |
-| bodyLarge | 15 | w400 |
-| bodyMedium | 14 | w400 |
-| bodySmall | 12 | w400 |
-| labelLarge | 13 | w600 |
-| labelMedium | 11 | w500 |
-| labelSmall | 10 | w400 |
+Always use `Theme.of(context).textTheme.*` in screens. Never hardcode font sizes.
 
 ### Shape Tokens (M3 — never use pill or StadiumBorder)
 
@@ -149,9 +132,19 @@ Valid values: `4, 8, 12, 16, 24, 32, 40, 48, 64`. Always a multiple of 4, prefer
 
 **Cards:** `AppTheme.card` background, 12px radius, elevation 0, margin zero
 
-**AppBar:** `AppTheme.background` color, elevation 0, `scrolledUnderElevation: 0`, `centerTitle: true`
+**AppBar:** `AppTheme.background` color, elevation 0, `scrolledUnderElevation: 2` (tonal lift when content scrolls under), `centerTitle: true`
 
-**NavigationBar:** `AppTheme.surface` bg, height 64, elevation 0
+**NavigationBar:** `AppTheme.surface` bg, height 64, elevation 2 with shadow
+
+**Elevation rules (M3 spec):**
+- FAB: elevation 6 (resting), focus/hover 8, highlight 12 — shadow visible
+- Bottom sheets: scrim at `colorScheme.scrim.withValues(alpha: 0.32)`
+- NavigationBar: elevation 2
+- AppBar: resting 0, scrolledUnder 2 (tonal)
+- Cards: NO shadows — use tonal surface colors instead
+- Dialogs: elevation 6
+- Never add arbitrary shadows to containers or cards
+- Tonal difference via surfaceContainer levels is the primary elevation language in this app
 
 **BottomSheet:** `AppTheme.surface` bg, top corners 28px, elevation 0
 
@@ -186,7 +179,8 @@ lib/
       screens/goals_screen.dart
       providers/goals_provider.dart
     ai/
-      screens/purchase_advisor_screen.dart
+      screens/purchase_advisor_screen.dart  ← main AI tab
+      screens/chat_screen.dart              ← push route from advisor (/chat)
       providers/ai_provider.dart
   shared/
     widgets/
@@ -231,6 +225,7 @@ lib/
 | `AppConstants.routeAnalytics` | `/analytics` |
 | `AppConstants.routeGoals` | `/goals` |
 | `AppConstants.routePurchaseAdvisor` | `/purchase-advisor` |
+| `AppConstants.routeChat` | `/chat` |
 
 ---
 

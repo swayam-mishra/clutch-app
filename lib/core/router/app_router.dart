@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
+import '../../features/ai/screens/chat_screen.dart';
 import '../../features/auth/screens/login_screen.dart';
 import '../../features/auth/screens/signup_screen.dart';
 import '../../features/budget/screens/budget_setup_screen.dart';
@@ -13,7 +14,7 @@ part 'app_router.g.dart';
 @Riverpod(keepAlive: true)
 GoRouter appRouter(AppRouterRef ref) {
   return GoRouter(
-    initialLocation: AppConstants.routeBudgetSetup, // TODO: revert to routeShell (then routeLogin) after auth is wired
+    initialLocation: AppConstants.routeShell,
     debugLogDiagnostics: true,
     routes: [
       GoRoute(
@@ -37,6 +38,10 @@ GoRouter appRouter(AppRouterRef ref) {
       GoRoute(
         path: AppConstants.routeBudgetSetup,
         builder: (context, state) => const BudgetSetupScreen(),
+      ),
+      GoRoute(
+        path: AppConstants.routeChat,
+        builder: (context, state) => const ChatScreen(),
       ),
     ],
   );
