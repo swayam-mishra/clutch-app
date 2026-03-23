@@ -7,7 +7,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../../core/theme/app_theme.dart';
-import '../../expenses/screens/expenses_screen.dart';
+import '../../expenses/providers/expense_provider.dart';
 
 // Mock data
 const double mockBudget = 3000;
@@ -41,13 +41,11 @@ const Map<int, double> mockCalendarData = {
   27: 0, 28: 0, 29: 0, 30: 0, 31: 0,
 };
 
-Future<void> _exportCsv() async {
+Future<void> _exportCsv(List<Expense> expenses) async {
   final buffer = StringBuffer();
   buffer.writeln('date,time,tag,category,amount');
-  for (final e in mockExpenses) {
-    final amount = (e['amount'] as double).toStringAsFixed(2);
-    buffer.writeln(
-        '${e['date']},${e['time']},${e['tag']},${e['category']},$amount');
+  for (final e in expenses) {
+    buffer.writeln('${e.date},${e.time},${e.tag},${e.category},${e.amount.toStringAsFixed(2)}');
   }
 
   final dir = await getTemporaryDirectory();
@@ -77,6 +75,7 @@ class AnalyticsScreen extends ConsumerWidget {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
     final categoryColors = [cs.primary, cs.secondary, cs.tertiary, cs.outline];
+    final expenses = ref.watch(expenseNotifierProvider).valueOrNull ?? [];
 
     return Scaffold(
       backgroundColor: AppTheme.background,
@@ -100,7 +99,7 @@ class AnalyticsScreen extends ConsumerWidget {
                   IconButton(
                     icon: const Icon(Icons.ios_share_rounded),
                     color: cs.onSurfaceVariant,
-                    onPressed: () => _exportCsv(),
+                    onPressed: () => _exportCsv(expenses),
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints(),
                   ),

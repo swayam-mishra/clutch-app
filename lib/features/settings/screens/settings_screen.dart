@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../auth/providers/auth_provider.dart';
+import '../../budget/providers/budget_provider.dart';
 import '../providers/settings_provider.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
@@ -14,16 +16,11 @@ class SettingsScreen extends ConsumerStatefulWidget {
 }
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
-  late TextEditingController _nameController;
-  late TextEditingController _emailController;
-
-  @override
-  void initState() {
-    super.initState();
-    final s = ref.read(settingsNotifierProvider);
-    _nameController = TextEditingController(text: s.name);
-    _emailController = TextEditingController(text: s.email);
-  }
+  final _nameController = TextEditingController();
+  final _emailController = TextEditingController();
+  bool _initialized = false;
+  bool _isSavingProfile = false;
+  bool _isLoggingOut = false;
 
   @override
   void dispose() {
@@ -41,19 +38,68 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     return '?';
   }
 
-  void _saveProfile() {
-    ref.read(settingsNotifierProvider.notifier).updateProfile(
-          _nameController.text,
-          _emailController.text,
+  Future<void> _saveProfile() async {
+    setState(() => _isSavingProfile = true);
+    try {
+      await ref.read(settingsNotifierProvider.notifier).saveProfile(
+            _nameController.text,
+            _emailController.text,
+          );
+      if (mounted) FocusScope.of(context).unfocus();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(_extractError(e))),
         );
-    FocusScope.of(context).unfocus();
+      }
+    } finally {
+      if (mounted) setState(() => _isSavingProfile = false);
+    }
+  }
+
+  Future<void> _logout() async {
+    setState(() => _isLoggingOut = true);
+    await ref.read(authNotifierProvider.notifier).logout();
+    if (mounted) context.go(AppConstants.routeLogin);
+  }
+
+  void _showChangePasswordSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => const _ChangePasswordSheet(),
+    );
+  }
+
+  String _extractError(Object e) {
+    try {
+      // DioException shape
+      final dynamic ex = e;
+      final msg = ex.response?.data['error'] as String?;
+      if (msg != null) return msg;
+    } catch (_) {}
+    return 'Something went wrong';
   }
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
-    final settings = ref.watch(settingsNotifierProvider);
+
+    final settingsAsync = ref.watch(settingsNotifierProvider);
+    final budget = ref.watch(budgetNotifierProvider).valueOrNull;
+
+    // Populate controllers once when data first loads
+    if (!_initialized) {
+      settingsAsync.whenData((s) {
+        _nameController.text = s.name;
+        _emailController.text = s.email;
+        _initialized = true;
+      });
+    }
+
+    final settings = settingsAsync.valueOrNull;
 
     return Scaffold(
       backgroundColor: AppTheme.background,
@@ -77,7 +123,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           children: [
             const SizedBox(height: 24),
 
-            // ── Profile ──────────────────────────────────────────────────
+            // ── Profile ────────────────────────────────────────────────────
             Center(
               child: Container(
                 width: 64,
@@ -87,13 +133,24 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   shape: BoxShape.circle,
                 ),
                 child: Center(
-                  child: Text(
-                    _initials(settings.name),
-                    style: tt.headlineSmall?.copyWith(
-                      color: cs.onPrimaryContainer,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
+                  child: settingsAsync.isLoading
+                      ? SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: cs.onPrimaryContainer,
+                          ),
+                        )
+                      : Text(
+                          _initials(_nameController.text.isNotEmpty
+                              ? _nameController.text
+                              : '?'),
+                          style: tt.headlineSmall?.copyWith(
+                            color: cs.onPrimaryContainer,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
                 ),
               ),
             ),
@@ -115,8 +172,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             SizedBox(
               width: double.infinity,
               child: FilledButton(
-                onPressed: _saveProfile,
-                child: const Text('save changes'),
+                onPressed: _isSavingProfile ? null : _saveProfile,
+                child: _isSavingProfile
+                    ? SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: cs.onPrimary,
+                        ),
+                      )
+                    : const Text('save changes'),
               ),
             ),
 
@@ -124,12 +190,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             Divider(color: cs.outlineVariant),
             const SizedBox(height: 20),
 
-            // ── Budget ───────────────────────────────────────────────────
+            // ── Budget ─────────────────────────────────────────────────────
             _SectionHeader('budget'),
             _SettingsTile(
               icon: Icons.account_balance_wallet_rounded,
               title: 'monthly limit',
-              subtitle: '₹3,000 · resets 1st of month',
+              subtitle: budget != null
+                  ? '₹${budget.amount.toInt()} · resets 1st of month'
+                  : 'tap to configure',
               trailing: Icon(Icons.chevron_right_rounded,
                   color: cs.onSurfaceVariant, size: 20),
               onTap: () => context.push(AppConstants.routeBudgetSetup),
@@ -139,64 +207,64 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             Divider(color: cs.outlineVariant),
             const SizedBox(height: 20),
 
-            // ── Notifications ────────────────────────────────────────────
+            // ── Notifications ───────────────────────────────────────────────
             _SectionHeader('notifications'),
             _ToggleTile(
               icon: Icons.notifications_rounded,
               title: 'spending alerts',
               subtitle: 'when you\'re close to your daily limit',
-              value: settings.spendingAlerts,
+              value: settings?.spendingAlerts ?? true,
               onChanged: (v) => ref
                   .read(settingsNotifierProvider.notifier)
-                  .toggleSpendingAlerts(v),
+                  .updatePreference(spendingAlerts: v),
             ),
             _ToggleTile(
               icon: Icons.flag_rounded,
               title: 'goal reminders',
               subtitle: 'milestones and deadlines',
-              value: settings.goalReminders,
+              value: settings?.goalReminders ?? true,
               onChanged: (v) => ref
                   .read(settingsNotifierProvider.notifier)
-                  .toggleGoalReminders(v),
+                  .updatePreference(goalReminders: v),
             ),
             _ToggleTile(
               icon: Icons.emoji_events_rounded,
               title: 'challenge nudges',
               subtitle: 'progress updates and completions',
-              value: settings.challengeNudges,
+              value: settings?.challengeNudges ?? false,
               onChanged: (v) => ref
                   .read(settingsNotifierProvider.notifier)
-                  .toggleChallengeNudges(v),
+                  .updatePreference(challengeNudges: v),
             ),
 
             const SizedBox(height: 24),
             Divider(color: cs.outlineVariant),
             const SizedBox(height: 20),
 
-            // ── Security ─────────────────────────────────────────────────
+            // ── Security ────────────────────────────────────────────────────
             _SectionHeader('security'),
             _ToggleTile(
               icon: Icons.fingerprint_rounded,
               title: 'app lock',
               subtitle: 'biometrics or PIN',
-              value: settings.appLock,
+              value: settings?.appLock ?? false,
               onChanged: (v) => ref
                   .read(settingsNotifierProvider.notifier)
-                  .toggleAppLock(v),
+                  .updatePreference(appLock: v),
             ),
             _SettingsTile(
               icon: Icons.lock_rounded,
               title: 'change password',
               trailing: Icon(Icons.chevron_right_rounded,
                   color: cs.onSurfaceVariant, size: 20),
-              onTap: () => debugPrint('change password'),
+              onTap: _showChangePasswordSheet,
             ),
 
             const SizedBox(height: 24),
             Divider(color: cs.outlineVariant),
             const SizedBox(height: 20),
 
-            // ── About ────────────────────────────────────────────────────
+            // ── About ───────────────────────────────────────────────────────
             _SectionHeader('about'),
             _SettingsTile(
               icon: Icons.info_outline_rounded,
@@ -225,13 +293,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             Divider(color: cs.outlineVariant),
             const SizedBox(height: 20),
 
-            // ── Account ──────────────────────────────────────────────────
+            // ── Account ─────────────────────────────────────────────────────
             _SectionHeader('account'),
             _SettingsTile(
               icon: Icons.logout_rounded,
-              title: 'log out',
+              title: _isLoggingOut ? 'logging out...' : 'log out',
               iconColor: cs.error,
-              onTap: () => debugPrint('log out'),
+              onTap: _isLoggingOut ? null : _logout,
             ),
             _SettingsTile(
               icon: Icons.delete_forever_rounded,
@@ -242,6 +310,157 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ),
 
             const SizedBox(height: 80),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Change password bottom sheet ─────────────────────────────────────────────
+
+class _ChangePasswordSheet extends ConsumerStatefulWidget {
+  const _ChangePasswordSheet();
+
+  @override
+  ConsumerState<_ChangePasswordSheet> createState() =>
+      _ChangePasswordSheetState();
+}
+
+class _ChangePasswordSheetState extends ConsumerState<_ChangePasswordSheet> {
+  final _currentController = TextEditingController();
+  final _newController = TextEditingController();
+  final _confirmController = TextEditingController();
+  bool _isSaving = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _currentController.dispose();
+    _newController.dispose();
+    _confirmController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    if (_newController.text != _confirmController.text) {
+      setState(() => _error = 'new passwords don\'t match');
+      return;
+    }
+    if (_newController.text.length < 6) {
+      setState(() => _error = 'password must be at least 6 characters');
+      return;
+    }
+    setState(() {
+      _isSaving = true;
+      _error = null;
+    });
+    try {
+      await ref.read(settingsNotifierProvider.notifier).changePassword(
+            _currentController.text,
+            _newController.text,
+          );
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Password updated')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        String msg = 'Failed to update password';
+        try {
+          final dynamic ex = e;
+          msg = ex.response?.data['error'] as String? ?? msg;
+        } catch (_) {}
+        setState(() {
+          _isSaving = false;
+          _error = msg;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+
+    return Padding(
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
+        decoration: BoxDecoration(
+          color: cs.surfaceContainerLow,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Center(
+              child: Container(
+                width: 32,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 20),
+                decoration: BoxDecoration(
+                  color: cs.outlineVariant,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            Text(
+              'change password',
+              style: tt.titleMedium?.copyWith(
+                color: cs.onSurface,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 20),
+            TextField(
+              controller: _currentController,
+              obscureText: true,
+              cursorColor: AppTheme.textSecondary,
+              decoration: const InputDecoration(labelText: 'current password'),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _newController,
+              obscureText: true,
+              cursorColor: AppTheme.textSecondary,
+              decoration: const InputDecoration(labelText: 'new password'),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _confirmController,
+              obscureText: true,
+              cursorColor: AppTheme.textSecondary,
+              decoration: const InputDecoration(labelText: 'confirm new password'),
+            ),
+            if (_error != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                  _error!,
+                  style: tt.labelSmall?.copyWith(color: cs.error),
+                ),
+              ),
+            const SizedBox(height: 24),
+            FilledButton(
+              onPressed: _isSaving ? null : _submit,
+              child: _isSaving
+                  ? SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: cs.onPrimary,
+                      ),
+                    )
+                  : const Text('update password'),
+            ),
           ],
         ),
       ),

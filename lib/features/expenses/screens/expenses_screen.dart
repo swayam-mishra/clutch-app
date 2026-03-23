@@ -1,60 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 
 import '../../../core/theme/app_theme.dart';
-
-final List<Map<String, dynamic>> mockExpenses = [
-  {
-    'id': 1, 'date': '23 Mar 2026', 'tag': 'chaat',
-    'category': 'Food & Dining', 'amount': 60.0,
-    'time': '09:12', 'icon': Icons.restaurant_rounded,
-  },
-  {
-    'id': 2, 'date': '23 Mar 2026', 'tag': 'uber',
-    'category': 'Transport', 'amount': 120.0,
-    'time': '10:45', 'icon': Icons.directions_car_rounded,
-  },
-  {
-    'id': 3, 'date': '23 Mar 2026', 'tag': 'cold drink',
-    'category': 'Food & Dining', 'amount': 20.0,
-    'time': '14:30', 'icon': Icons.local_cafe_rounded,
-  },
-  {
-    'id': 4, 'date': '22 Mar 2026', 'tag': 'groceries',
-    'category': 'Shopping', 'amount': 340.0,
-    'time': '11:20', 'icon': Icons.shopping_bag_rounded,
-  },
-  {
-    'id': 5, 'date': '22 Mar 2026', 'tag': 'metro',
-    'category': 'Transport', 'amount': 30.0,
-    'time': '09:05', 'icon': Icons.directions_subway_rounded,
-  },
-  {
-    'id': 6, 'date': '21 Mar 2026', 'tag': 'netflix',
-    'category': 'Entertainment', 'amount': 199.0,
-    'time': '20:00', 'icon': Icons.play_circle_outline_rounded,
-  },
-  {
-    'id': 7, 'date': '21 Mar 2026', 'tag': 'dinner',
-    'category': 'Food & Dining', 'amount': 450.0,
-    'time': '21:30', 'icon': Icons.restaurant_rounded,
-  },
-  {
-    'id': 8, 'date': '20 Mar 2026', 'tag': 'rapido',
-    'category': 'Transport', 'amount': 45.0,
-    'time': '08:15', 'icon': Icons.two_wheeler_rounded,
-  },
-  {
-    'id': 9, 'date': '20 Mar 2026', 'tag': 'books',
-    'category': 'Education', 'amount': 280.0,
-    'time': '15:00', 'icon': Icons.menu_book_rounded,
-  },
-  {
-    'id': 10, 'date': '19 Mar 2026', 'tag': 'maggi',
-    'category': 'Food & Dining', 'amount': 30.0,
-    'time': '23:45', 'icon': Icons.ramen_dining_rounded,
-  },
-];
+import '../providers/expense_provider.dart';
 
 const List<String> _categories = [
   'All', 'Food & Dining', 'Transport',
@@ -79,22 +28,38 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
     super.dispose();
   }
 
-  List<Map<String, dynamic>> get _filtered {
-    return mockExpenses.where((e) {
+  static IconData _categoryIcon(String category) {
+    switch (category) {
+      case 'Food & Dining': return Icons.restaurant_rounded;
+      case 'Transport':     return Icons.directions_car_rounded;
+      case 'Shopping':      return Icons.shopping_bag_rounded;
+      case 'Entertainment': return Icons.movie_rounded;
+      case 'Health':        return Icons.favorite_rounded;
+      case 'Bills':         return Icons.receipt_rounded;
+      case 'Education':     return Icons.school_rounded;
+      default:              return Icons.category_rounded;
+    }
+  }
+
+  static String _displayDate(Expense e) {
+    final local = DateTime.parse('${e.date}T${e.time}:00Z').toLocal();
+    return DateFormat('d MMM yyyy').format(local);
+  }
+
+  List<Expense> _filter(List<Expense> expenses) {
+    return expenses.where((e) {
       final matchSearch = _searchQuery.isEmpty ||
-          (e['tag'] as String)
-              .toLowerCase()
-              .contains(_searchQuery.toLowerCase());
-      final matchCat = _selectedCategory == null ||
-          e['category'] == _selectedCategory;
+          e.tag.toLowerCase().contains(_searchQuery.toLowerCase());
+      final matchCat =
+          _selectedCategory == null || e.category == _selectedCategory;
       return matchSearch && matchCat;
     }).toList();
   }
 
-  Map<String, List<Map<String, dynamic>>> get _grouped {
-    final result = <String, List<Map<String, dynamic>>>{};
-    for (final e in _filtered) {
-      result.putIfAbsent(e['date'] as String, () => []).add(e);
+  Map<String, List<Expense>> _group(List<Expense> filtered) {
+    final result = <String, List<Expense>>{};
+    for (final e in filtered) {
+      result.putIfAbsent(_displayDate(e), () => []).add(e);
     }
     return result;
   }
@@ -103,7 +68,9 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
-    final grouped = _grouped;
+    final expenses = ref.watch(expenseNotifierProvider).valueOrNull ?? [];
+    final filtered = _filter(expenses);
+    final grouped = _group(filtered);
 
     return Scaffold(
       backgroundColor: AppTheme.background,
@@ -126,7 +93,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
             ),
             actions: [
               Text(
-                '${mockExpenses.length} transactions',
+                '${expenses.length} transactions',
                 style: tt.labelMedium?.copyWith(
                   color: cs.onSurfaceVariant,
                 ),
@@ -227,7 +194,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
           ),
 
           // Expense groups or empty state
-          if (_filtered.isEmpty)
+          if (filtered.isEmpty)
             SliverFillRemaining(
               child: Center(
                 child: Column(
@@ -260,7 +227,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                     final date = entry.key;
                     final items = entry.value;
                     final dayTotal = items.fold<double>(
-                      0, (sum, e) => sum + (e['amount'] as double),
+                      0, (sum, e) => sum + e.amount,
                     );
                     // Date header
                     widgets.add(
@@ -309,19 +276,19 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                                 borderRadius: BorderRadius.circular(10),
                               ),
                               child: Icon(
-                                expense['icon'] as IconData,
+                                _categoryIcon(expense.category),
                                 color: cs.onSecondaryContainer,
                                 size: 20,
                               ),
                             ),
                             title: Text(
-                              expense['tag'] as String,
+                              expense.tag,
                               style: tt.bodyMedium?.copyWith(
                                 color: cs.onSurface,
                               ),
                             ),
                             subtitle: Text(
-                              expense['category'] as String,
+                              expense.category,
                               style: tt.bodySmall?.copyWith(
                                 color: cs.onSurfaceVariant,
                               ),
@@ -331,22 +298,21 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                               crossAxisAlignment: CrossAxisAlignment.end,
                               children: [
                                 Text(
-                                  '₹${(expense['amount'] as double).toInt()}',
+                                  '₹${expense.amount.toInt()}',
                                   style: tt.titleSmall?.copyWith(
                                     color: cs.onSurface,
                                     fontWeight: FontWeight.w600,
                                   ),
                                 ),
                                 Text(
-                                  expense['time'] as String,
+                                  expense.time,
                                   style: tt.labelSmall?.copyWith(
                                     color: cs.onSurfaceVariant,
                                   ),
                                 ),
                               ],
                             ),
-                            onTap: () =>
-                                print('tapped ${expense['tag']}'),
+                            onTap: () => debugPrint('tapped ${expense.tag}'),
                           ),
                         ),
                       );

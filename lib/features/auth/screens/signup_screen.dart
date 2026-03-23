@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_theme.dart';
+import '../providers/auth_provider.dart';
 
 class SignupScreen extends ConsumerStatefulWidget {
   const SignupScreen({super.key});
@@ -14,10 +15,10 @@ class SignupScreen extends ConsumerStatefulWidget {
 }
 
 class _SignupScreenState extends ConsumerState<SignupScreen> {
-  final _nameController     = TextEditingController();
-  final _emailController    = TextEditingController();
+  final _nameController = TextEditingController();
+  final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  final _confirmController  = TextEditingController();
+  final _confirmController = TextEditingController();
   bool _obscurePassword = true;
 
   @override
@@ -32,6 +33,16 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
   @override
   Widget build(BuildContext context) {
     final tt = Theme.of(context).textTheme;
+    final cs = Theme.of(context).colorScheme;
+
+    // Navigate to budget setup on successful signup
+    ref.listen<AuthState>(authNotifierProvider, (prev, next) {
+      if (next.isAuthenticated) {
+        context.go(AppConstants.routeBudgetSetup);
+      }
+    });
+
+    final auth = ref.watch(authNotifierProvider);
 
     return Scaffold(
       backgroundColor: AppTheme.background,
@@ -41,10 +52,9 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // 1. Top spacing
               const SizedBox(height: 60),
 
-              // 2. Back button
+              // Back button
               IconButton(
                 onPressed: () => context.go(AppConstants.routeLogin),
                 icon: const Icon(Icons.arrow_back_ios_new_rounded),
@@ -53,55 +63,39 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                 constraints: const BoxConstraints(),
               ),
 
-              // 3. Spacing
               const SizedBox(height: 16),
 
-              // 4. Title
-              Text(
-                'create account',
-                style: tt.displaySmall,
-              ),
-
-              // 5. Subtitle
+              Text('create account', style: tt.displaySmall),
               const SizedBox(height: 6),
               Text(
                 'takes 30 seconds.',
                 style: tt.bodyMedium?.copyWith(color: AppTheme.textSecondary),
               ),
 
-              // 6. Spacing
               const SizedBox(height: 40),
 
-              // 7. Full name field
+              // Full name
               TextField(
                 controller: _nameController,
                 textCapitalization: TextCapitalization.words,
                 cursorColor: AppTheme.textSecondary,
                 style: tt.bodyLarge?.copyWith(color: AppTheme.textPrimary),
-                decoration: const InputDecoration(
-                  hintText: 'full name',
-                ),
+                decoration: const InputDecoration(hintText: 'full name'),
               ),
-
-              // 8. Spacing
               const SizedBox(height: 12),
 
-              // 9. Email field
+              // Email
               TextField(
                 controller: _emailController,
                 keyboardType: TextInputType.emailAddress,
                 autocorrect: false,
                 cursorColor: AppTheme.textSecondary,
                 style: tt.bodyLarge?.copyWith(color: AppTheme.textPrimary),
-                decoration: const InputDecoration(
-                  hintText: 'email',
-                ),
+                decoration: const InputDecoration(hintText: 'email'),
               ),
-
-              // 10. Spacing
               const SizedBox(height: 12),
 
-              // 11. Password field with visibility toggle
+              // Password
               TextField(
                 controller: _passwordController,
                 obscureText: _obscurePassword,
@@ -122,49 +116,82 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                   ),
                 ),
               ),
-
-              // 12. Spacing
               const SizedBox(height: 12),
 
-              // 13. Confirm password field
+              // Confirm password
               TextField(
                 controller: _confirmController,
                 obscureText: true,
                 cursorColor: AppTheme.textSecondary,
                 style: tt.bodyLarge?.copyWith(color: AppTheme.textPrimary),
-                decoration: const InputDecoration(
-                  hintText: 'confirm password',
-                ),
+                decoration:
+                    const InputDecoration(hintText: 'confirm password'),
               ),
 
-              // 14. Spacing
+              // Error message
+              if (auth.error != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 12),
+                  child: Text(
+                    auth.error!,
+                    style: tt.labelSmall?.copyWith(color: cs.error),
+                  ),
+                ),
+
               const SizedBox(height: 32),
 
-              // 15. Create account button — M3 FilledButton, primary action
+              // Create account button
               FilledButton(
-                onPressed: () => print('signup tapped'),
+                onPressed: auth.isLoading
+                    ? null
+                    : () {
+                        if (_passwordController.text !=
+                            _confirmController.text) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                                content: Text("passwords don't match")),
+                          );
+                          return;
+                        }
+                        ref.read(authNotifierProvider.notifier).signup(
+                              _nameController.text.trim(),
+                              _emailController.text.trim(),
+                              _passwordController.text,
+                            );
+                      },
                 style: FilledButton.styleFrom(
                   minimumSize: const Size(double.infinity, 52),
                   shape: const RoundedRectangleBorder(
                     borderRadius: BorderRadius.all(Radius.circular(16)),
                   ),
                 ),
-                child: const Text('create account'),
+                child: auth.isLoading
+                    ? SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: cs.onPrimary,
+                        ),
+                      )
+                    : const Text('create account'),
               ),
 
-              // 16. Spacing
               const SizedBox(height: 24),
 
-              // 17. Already have account row
+              // Already have account
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Text(
                     'already have an account? ',
-                    style: tt.bodySmall?.copyWith(color: AppTheme.textSecondary),
+                    style:
+                        tt.bodySmall?.copyWith(color: AppTheme.textSecondary),
                   ),
                   TextButton(
-                    onPressed: () => context.go(AppConstants.routeLogin),
+                    onPressed: auth.isLoading
+                        ? null
+                        : () => context.go(AppConstants.routeLogin),
                     style: TextButton.styleFrom(
                       padding: EdgeInsets.zero,
                       minimumSize: Size.zero,
@@ -182,7 +209,6 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                 ],
               ),
 
-              // 18. Bottom spacing
               const SizedBox(height: 40),
             ],
           ),

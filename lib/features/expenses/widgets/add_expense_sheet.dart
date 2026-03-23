@@ -1,6 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/theme/app_theme.dart';
+import '../providers/expense_provider.dart';
 
 // ── Category data ─────────────────────────────────────────────────────────────
 
@@ -17,53 +21,29 @@ const List<_Cat> _kCategories = [
   (category: 'Other', short: 'other', icon: Icons.category_rounded),
 ];
 
-({String category, IconData icon, int confidence}) _mockCategorize(String tag) {
-  final t = tag.toLowerCase();
-  if (RegExp(r'chaat|food|lunch|dinner|breakfast|coffee|chai|restaurant|swiggy|zomato|drink|snack|meal|biryani|pizza|burger|juice')
-      .hasMatch(t)) {
-    return (category: 'Food & Dining', icon: Icons.restaurant_rounded, confidence: 91);
-  }
-  if (RegExp(r'uber|ola|metro|bus|auto|cab|train|flight|petrol|fuel|rapido|bike|rickshaw')
-      .hasMatch(t)) {
-    return (category: 'Transport', icon: Icons.directions_car_rounded, confidence: 88);
-  }
-  if (RegExp(r'groceries|shopping|clothes|amazon|flipkart|mall|store|kirana|market|myntra')
-      .hasMatch(t)) {
-    return (category: 'Shopping', icon: Icons.shopping_bag_rounded, confidence: 85);
-  }
-  if (RegExp(r'movie|netflix|game|spotify|youtube|entertainment|party|concert|ticket|outing')
-      .hasMatch(t)) {
-    return (category: 'Entertainment', icon: Icons.movie_rounded, confidence: 83);
-  }
-  if (RegExp(r'doctor|medicine|pharmacy|hospital|gym|health|medical|chemist|tablet')
-      .hasMatch(t)) {
-    return (category: 'Health', icon: Icons.favorite_rounded, confidence: 87);
-  }
-  if (RegExp(r'rent|electricity|wifi|bill|recharge|subscription|mobile|internet|dth')
-      .hasMatch(t)) {
-    return (category: 'Bills', icon: Icons.receipt_rounded, confidence: 84);
-  }
-  if (RegExp(r'book|course|fees|tuition|school|college|class|study|stationery|notes')
-      .hasMatch(t)) {
-    return (category: 'Education', icon: Icons.school_rounded, confidence: 86);
-  }
-  return (category: 'Other', icon: Icons.category_rounded, confidence: 52);
-}
 
 // ── Sheet ─────────────────────────────────────────────────────────────────────
 
-class AddExpenseSheet extends StatefulWidget {
+class AddExpenseSheet extends ConsumerStatefulWidget {
   const AddExpenseSheet({super.key});
 
   @override
-  State<AddExpenseSheet> createState() => _AddExpenseSheetState();
+  ConsumerState<AddExpenseSheet> createState() => _AddExpenseSheetState();
 }
 
-class _AddExpenseSheetState extends State<AddExpenseSheet> {
+class _AddExpenseSheetState extends ConsumerState<AddExpenseSheet> {
   String _amount = '';
   final TextEditingController _tagController = TextEditingController();
   String? _overrideCategory;
   bool _showPicker = false;
+  bool _isLogging = false;
+
+  // AI categorization state
+  String? _predictedCategory;
+  IconData? _predictedIcon;
+  int? _predictedConfidence;
+  bool _isCategorizing = false;
+  Timer? _debounceTimer;
 
   @override
   void initState() {
@@ -73,10 +53,50 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
 
   void _onTagChanged() {
     setState(() => _overrideCategory = null);
+    _debounceTimer?.cancel();
+    final tag = _tagController.text.trim();
+    if (tag.isEmpty) {
+      setState(() {
+        _predictedCategory = null;
+        _predictedIcon = null;
+        _predictedConfidence = null;
+        _isCategorizing = false;
+      });
+      return;
+    }
+    setState(() => _isCategorizing = true);
+    _debounceTimer = Timer(
+      const Duration(milliseconds: 600),
+      () => _categorize(tag),
+    );
+  }
+
+  Future<void> _categorize(String tag) async {
+    try {
+      final result = await ref
+          .read(expenseNotifierProvider.notifier)
+          .categorize(tag);
+      final match = _kCategories.firstWhere(
+        (c) => c.category == result.category,
+        orElse: () => _kCategories.last,
+      );
+      if (mounted) {
+        setState(() {
+          _predictedCategory = result.category;
+          _predictedIcon = match.icon;
+          _predictedConfidence = result.confidence;
+          _isCategorizing = false;
+          if (result.confidence < 70) _showPicker = true;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _isCategorizing = false);
+    }
   }
 
   @override
   void dispose() {
+    _debounceTimer?.cancel();
     _tagController.removeListener(_onTagChanged);
     _tagController.dispose();
     super.dispose();
@@ -94,12 +114,33 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
     setState(() => _amount = _amount.substring(0, _amount.length - 1));
   }
 
-  void _confirm() {
+  Future<void> _confirm() async {
+    final amount = double.tryParse(_amount) ?? 0;
+    if (amount <= 0) return;
+
     final tag = _tagController.text.trim();
-    final predicted = tag.isNotEmpty ? _mockCategorize(tag) : null;
-    final finalCategory = _overrideCategory ?? predicted?.category ?? 'Other';
-    debugPrint('log: ₹$_amount · $tag · $finalCategory');
-    Navigator.pop(context);
+    final finalCategory = _overrideCategory ?? _predictedCategory ?? 'Other';
+    final confidence = _overrideCategory != null
+        ? 100
+        : _predictedConfidence ?? 100;
+
+    setState(() => _isLogging = true);
+    try {
+      await ref.read(expenseNotifierProvider.notifier).logExpense(
+            amount: amount,
+            tag: tag.isNotEmpty ? tag : 'expense',
+            category: finalCategory,
+            confidence: confidence,
+          );
+      if (mounted) Navigator.pop(context);
+    } catch (_) {
+      if (mounted) {
+        setState(() => _isLogging = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to log expense')),
+        );
+      }
+    }
   }
 
   @override
@@ -110,16 +151,15 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
     final hasTag = _tagController.text.isNotEmpty;
 
     // Resolve what to display in the category chip
-    final predicted = hasTag ? _mockCategorize(_tagController.text) : null;
     final isOverridden = _overrideCategory != null;
-    final displayCategory = _overrideCategory ?? predicted?.category;
+    final displayCategory = _overrideCategory ?? _predictedCategory;
     final displayIcon = isOverridden
         ? _kCategories
             .firstWhere((c) => c.category == _overrideCategory,
                 orElse: () => _kCategories.last)
             .icon
-        : predicted?.icon;
-    final confidence = isOverridden ? null : predicted?.confidence;
+        : _predictedIcon;
+    final confidence = isOverridden ? null : _predictedConfidence;
     final isHighConfidence = confidence != null && confidence >= 80;
 
     // Chip colors
@@ -229,35 +269,50 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
                           ),
                           child: Row(
                             children: [
-                              Icon(displayIcon, size: 16, color: chipOn),
+                              if (_isCategorizing)
+                                SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: cs.onSurfaceVariant,
+                                  ),
+                                )
+                              else
+                                Icon(displayIcon ?? Icons.category_rounded,
+                                    size: 16, color: chipOn),
                               const SizedBox(width: 8),
                               Text(
-                                displayCategory ?? '',
+                                _isCategorizing
+                                    ? 'categorizing...'
+                                    : displayCategory ?? '',
                                 style: tt.labelMedium?.copyWith(
-                                  color: chipOn,
+                                  color: _isCategorizing
+                                      ? cs.onSurfaceVariant
+                                      : chipOn,
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
                               const SizedBox(width: 8),
                               // Confidence badge OR "edited" badge
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 6, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color:
-                                      Colors.white.withValues(alpha: 0.18),
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                                child: Text(
-                                  isOverridden
-                                      ? 'edited'
-                                      : '$confidence%',
-                                  style: tt.labelSmall?.copyWith(
-                                    color: chipOn,
-                                    fontWeight: FontWeight.w600,
+                              if (isOverridden || confidence != null)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withValues(alpha: 0.18),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Text(
+                                    isOverridden
+                                        ? 'edited'
+                                        : '$confidence%',
+                                    style: tt.labelSmall?.copyWith(
+                                      color: chipOn,
+                                      fontWeight: FontWeight.w600,
+                                    ),
                                   ),
                                 ),
-                              ),
                               const Spacer(),
                               Text(
                                 _showPicker ? 'close' : 'change',
@@ -291,7 +346,7 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
                                   children: _kCategories.map((cat) {
                                     final isSelected =
                                         (_overrideCategory ??
-                                                predicted?.category) ==
+                                                _predictedCategory) ==
                                             cat.category;
                                     return GestureDetector(
                                       onTap: () => setState(() {
@@ -372,7 +427,7 @@ class _AddExpenseSheetState extends State<AddExpenseSheet> {
             _NumButton(label: '1', onTap: () => _appendDigit('1'), cs: cs, tt: tt),
             _NumButton(label: '2', onTap: () => _appendDigit('2'), cs: cs, tt: tt),
             _NumButton(label: '3', onTap: () => _appendDigit('3'), cs: cs, tt: tt),
-            _ConfirmButton(onTap: _confirm, cs: cs),
+            _ConfirmButton(onTap: _isLogging ? () {} : _confirm, cs: cs, isLoading: _isLogging),
           ]),
           const SizedBox(height: 8),
           _NumRow(children: [
@@ -467,14 +522,19 @@ class _BackspaceButton extends StatelessWidget {
 }
 
 class _ConfirmButton extends StatelessWidget {
-  const _ConfirmButton({required this.onTap, required this.cs});
+  const _ConfirmButton({
+    required this.onTap,
+    required this.cs,
+    this.isLoading = false,
+  });
   final VoidCallback onTap;
   final ColorScheme cs;
+  final bool isLoading;
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: onTap,
+      onTap: isLoading ? null : onTap,
       child: Container(
         height: 56,
         decoration: BoxDecoration(
@@ -482,11 +542,16 @@ class _ConfirmButton extends StatelessWidget {
           borderRadius: BorderRadius.circular(12),
         ),
         alignment: Alignment.center,
-        child: Icon(
-          Icons.check_rounded,
-          size: 24,
-          color: cs.onPrimary,
-        ),
+        child: isLoading
+            ? SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: cs.onPrimary,
+                ),
+              )
+            : Icon(Icons.check_rounded, size: 24, color: cs.onPrimary),
       ),
     );
   }

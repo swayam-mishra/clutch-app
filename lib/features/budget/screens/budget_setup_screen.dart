@@ -1,21 +1,25 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../auth/providers/auth_provider.dart';
+import '../providers/budget_provider.dart';
 
-class BudgetSetupScreen extends StatefulWidget {
+class BudgetSetupScreen extends ConsumerStatefulWidget {
   const BudgetSetupScreen({super.key});
 
   @override
-  State<BudgetSetupScreen> createState() => _BudgetSetupScreenState();
+  ConsumerState<BudgetSetupScreen> createState() => _BudgetSetupScreenState();
 }
 
-class _BudgetSetupScreenState extends State<BudgetSetupScreen> {
+class _BudgetSetupScreenState extends ConsumerState<BudgetSetupScreen> {
   final TextEditingController _amountController = TextEditingController();
   String _selectedCurrency = 'INR';
   String _distribution = 'distribute';
+  bool _isLoading = false;
 
   late DateTime _startDate;
   late DateTime _endDate;
@@ -342,28 +346,59 @@ class _BudgetSetupScreenState extends State<BudgetSetupScreen> {
                 width: double.infinity,
                 height: 52,
                 child: FilledButton(
-                  onPressed: () {
-                    debugPrint('amount: ${_amountController.text}');
-                    debugPrint('currency: $_selectedCurrency');
-                    debugPrint('start: $_startDate, end: $_endDate');
-                    debugPrint('distribution: $_distribution');
-                    if (Navigator.of(context).canPop()) {
-                      context.pop();
-                    } else {
-                      context.go(AppConstants.routeShell);
-                    }
-                  },
+                  onPressed: _isLoading
+                      ? null
+                      : () async {
+                          final amount =
+                              double.tryParse(_amountController.text) ?? 0;
+                          if (amount <= 0) return;
+                          setState(() => _isLoading = true);
+                          try {
+                            await ref
+                                .read(budgetNotifierProvider.notifier)
+                                .saveBudget(
+                                  amount: amount,
+                                  currency: _selectedCurrency,
+                                  startDate: _startDate,
+                                  endDate: _endDate,
+                                  distribution: _distribution,
+                                );
+                            await ref
+                                .read(authNotifierProvider.notifier)
+                                .setHasBudget();
+                            if (context.mounted) {
+                              context.go(AppConstants.routeShell);
+                            }
+                          } catch (e) {
+                            debugPrint('saveBudget error: $e');
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text(e.toString())),
+                              );
+                            }
+                            setState(() => _isLoading = false);
+                          }
+                        },
                   style: FilledButton.styleFrom(
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
                     ),
                   ),
-                  child: Text(
-                    'save budget',
-                    style: textTheme.labelLarge?.copyWith(
-                      color: colorScheme.onPrimary,
-                    ),
-                  ),
+                  child: _isLoading
+                      ? SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: colorScheme.onPrimary,
+                          ),
+                        )
+                      : Text(
+                          'save budget',
+                          style: textTheme.labelLarge?.copyWith(
+                            color: colorScheme.onPrimary,
+                          ),
+                        ),
                 ),
               ),
               const SizedBox(height: 24),

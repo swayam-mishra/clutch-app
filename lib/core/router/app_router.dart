@@ -16,7 +16,7 @@ part 'app_router.g.dart';
 @Riverpod(keepAlive: true)
 GoRouter appRouter(AppRouterRef ref) {
   return GoRouter(
-    initialLocation: AppConstants.routeShell,
+    initialLocation: AppConstants.routeLogin,
     debugLogDiagnostics: true,
     routes: [
       GoRoute(

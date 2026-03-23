@@ -1,20 +1,65 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 
 import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_theme.dart';
-import '../../settings/providers/settings_provider.dart';
+import '../../auth/providers/auth_provider.dart';
+import '../../budget/providers/budget_provider.dart';
+import '../../expenses/providers/expense_provider.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
+
+  static IconData _categoryIcon(String category) {
+    switch (category) {
+      case 'Food & Dining':
+        return Icons.restaurant_rounded;
+      case 'Transport':
+        return Icons.directions_car_rounded;
+      case 'Shopping':
+        return Icons.shopping_bag_rounded;
+      case 'Entertainment':
+        return Icons.movie_rounded;
+      case 'Health':
+        return Icons.favorite_rounded;
+      case 'Bills':
+        return Icons.receipt_rounded;
+      case 'Education':
+        return Icons.school_rounded;
+      default:
+        return Icons.category_rounded;
+    }
+  }
+
+  static String _periodLabel(String isoDate) {
+    final parts = isoDate.split('-');
+    if (parts.length < 2) return '';
+    final dt = DateTime(int.parse(parts[0]), int.parse(parts[1]));
+    return DateFormat('MMMM yyyy').format(dt).toLowerCase();
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
-    final settings = ref.watch(settingsNotifierProvider);
-    final firstName = settings.name.split(' ').first.toLowerCase();
+    final auth = ref.watch(authNotifierProvider);
+    final firstName =
+        (auth.userName ?? 'there').split(' ').first.toLowerCase();
+    final budget = ref.watch(budgetNotifierProvider).valueOrNull;
+    final allExpenses = ref.watch(expenseNotifierProvider).valueOrNull ?? [];
+    final now = DateTime.now();
+    final todayExpenses = allExpenses.where((e) {
+      final local = DateTime.parse('${e.date}T${e.time}:00Z').toLocal();
+      return local.year == now.year &&
+          local.month == now.month &&
+          local.day == now.day;
+    }).toList();
+    final dayTotal =
+        todayExpenses.fold<double>(0, (sum, e) => sum + e.amount);
+    final dateLabel =
+        DateFormat('EEEE, d MMMM').format(DateTime.now()).toLowerCase();
 
     return Scaffold(
       backgroundColor: AppTheme.background,
@@ -70,7 +115,7 @@ class HomeScreen extends ConsumerWidget {
                           ),
                         ),
                         Text(
-                          'monday, 23 march',
+                          dateLabel,
                           style: textTheme.labelLarge?.copyWith(
                             color: colorScheme.onSurface,
                           ),
@@ -81,7 +126,9 @@ class HomeScreen extends ConsumerWidget {
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
                         Text(
-                          '₹233',
+                          budget != null
+                              ? '₹${budget.dailyRemaining.toInt()}'
+                              : '—',
                           style: textTheme.headlineLarge?.copyWith(
                             color: colorScheme.primary,
                             fontWeight: FontWeight.w700,
@@ -136,7 +183,9 @@ class HomeScreen extends ConsumerWidget {
                           ],
                         ),
                         Text(
-                          'march 2026',
+                          budget != null
+                              ? _periodLabel(budget.startDate)
+                              : '—',
                           style: textTheme.labelSmall?.copyWith(
                             color: colorScheme.onSurfaceVariant,
                           ),
@@ -145,7 +194,9 @@ class HomeScreen extends ConsumerWidget {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      '₹3,000',
+                      budget != null
+                          ? '₹${budget.amount.toInt()}'
+                          : '—',
                       style: textTheme.displaySmall?.copyWith(
                         color: colorScheme.onSurface,
                         fontWeight: FontWeight.w700,
@@ -153,14 +204,16 @@ class HomeScreen extends ConsumerWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      '₹670 spent · 22% used',
+                      budget != null
+                          ? '₹${budget.totalSpent.toInt()} spent · ${(budget.spentFraction * 100).toInt()}% used'
+                          : '—',
                       style: textTheme.bodySmall?.copyWith(
                         color: colorScheme.onSurfaceVariant,
                       ),
                     ),
                     const SizedBox(height: 12),
                     LinearProgressIndicator(
-                      value: 0.22,
+                      value: budget?.spentFraction ?? 0,
                       backgroundColor: colorScheme.surfaceContainerHighest,
                       valueColor: AlwaysStoppedAnimation<Color>(colorScheme.primary),
                       borderRadius: BorderRadius.circular(4),
@@ -190,7 +243,9 @@ class HomeScreen extends ConsumerWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              '₹2,330',
+                              budget != null
+                                  ? '₹${budget.remainingBudget.toInt()}'
+                                  : '—',
                               style: textTheme.titleLarge?.copyWith(
                                 color: colorScheme.onSurface,
                                 fontWeight: FontWeight.w700,
@@ -209,13 +264,19 @@ class HomeScreen extends ConsumerWidget {
                                 vertical: 2,
                               ),
                               decoration: BoxDecoration(
-                                color: colorScheme.primaryContainer,
+                                color: (budget?.isOnTrack ?? true)
+                                    ? colorScheme.primaryContainer
+                                    : colorScheme.errorContainer,
                                 borderRadius: BorderRadius.circular(4),
                               ),
                               child: Text(
-                                'on track',
+                                (budget?.isOnTrack ?? true)
+                                    ? 'on track'
+                                    : 'over budget',
                                 style: textTheme.labelSmall?.copyWith(
-                                  color: colorScheme.onPrimaryContainer,
+                                  color: (budget?.isOnTrack ?? true)
+                                      ? colorScheme.onPrimaryContainer
+                                      : colorScheme.onErrorContainer,
                                 ),
                               ),
                             ),
@@ -236,7 +297,9 @@ class HomeScreen extends ConsumerWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              '12',
+                              budget != null
+                                  ? '${budget.daysRemaining}'
+                                  : '—',
                               style: textTheme.titleLarge?.copyWith(
                                 color: colorScheme.onSurface,
                                 fontWeight: FontWeight.w700,
@@ -250,7 +313,9 @@ class HomeScreen extends ConsumerWidget {
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              '₹194/day',
+                              budget != null
+                                  ? '₹${budget.dailyLimit.toInt()}/day'
+                                  : '—',
                               style: textTheme.labelSmall?.copyWith(
                                 color: colorScheme.primary,
                               ),
@@ -303,46 +368,43 @@ class HomeScreen extends ConsumerWidget {
               ),
 
               // 8. Today's expense list
-              _ExpenseItem(
-                icon: Icons.restaurant_rounded,
-                title: 'chaat',
-                subtitle: 'food & dining',
-                amount: '₹60',
-                colorScheme: colorScheme,
-                textTheme: textTheme,
-              ),
-              _ExpenseItem(
-                icon: Icons.directions_car_rounded,
-                title: 'uber',
-                subtitle: 'transport',
-                amount: '₹120',
-                colorScheme: colorScheme,
-                textTheme: textTheme,
-              ),
-              _ExpenseItem(
-                icon: Icons.local_cafe_rounded,
-                title: 'cold drink',
-                subtitle: 'food & dining',
-                amount: '₹20',
-                colorScheme: colorScheme,
-                textTheme: textTheme,
-              ),
+              if (todayExpenses.isEmpty)
+                Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  child: Text(
+                    'no expenses logged today',
+                    style: textTheme.bodySmall?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                )
+              else
+                ...todayExpenses.take(3).map((e) => _ExpenseItem(
+                      icon: _categoryIcon(e.category),
+                      title: e.tag,
+                      subtitle: e.category.toLowerCase(),
+                      amount: '₹${e.amount.toInt()}',
+                      colorScheme: colorScheme,
+                      textTheme: textTheme,
+                    )),
 
               // Day total row
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Row(
-                  children: [
-                    const Spacer(),
-                    Text(
-                      'day total: ₹200',
-                      style: textTheme.labelMedium?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
+              if (todayExpenses.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Row(
+                    children: [
+                      const Spacer(),
+                      Text(
+                        'day total: ₹${dayTotal.toInt()}',
+                        style: textTheme.labelMedium?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
 
               // 9. Bottom spacing for FAB
               const SizedBox(height: 120),

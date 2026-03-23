@@ -63,18 +63,18 @@ lib/
   core/
     theme/          ← AppTheme — single source of truth for colors & fonts
     constants/      ← route strings, API base URL, storage keys
-    network/        ← Dio client + Bearer token interceptor
+    network/        ← Dio client + Bearer token interceptor + auto-refresh
     router/         ← GoRouter config (all routes)
   features/
-    auth/           ← login, signup screens + auth provider
-    budget/         ← budget setup screen + provider
-    expenses/       ← home screen, expense list, add-expense sheet + provider
-    analytics/      ← analytics screen + provider (includes CSV export)
-    goals/          ← goals screen + provider
-    challenges/     ← challenges section widget (lives inside goals tab)
-    health/         ← health score detail screen
-    ai/             ← purchase advisor + chat coach screens + provider
-    settings/       ← settings screen + settings provider
+    auth/           ← login, signup screens + auth provider (wired)
+    budget/         ← budget setup screen + provider (wired)
+    expenses/       ← home screen, expense list, add-expense sheet + provider (wired)
+    analytics/      ← analytics screen + provider (mock data)
+    goals/          ← goals screen + provider (mock data)
+    challenges/     ← challenges section widget — lives inside goals tab (mock data)
+    health/         ← health score detail screen (mock data)
+    ai/             ← purchase advisor + chat coach screens + provider (mock data)
+    settings/       ← settings screen + provider (partially wired)
     home/           ← main shell (bottom nav + FAB)
   shared/
     widgets/        ← ClutchButton, ClutchCard, LoadingIndicator
@@ -127,6 +127,8 @@ Watch mode during active development:
 dart run build_runner watch --delete-conflicting-outputs
 ```
 
+> **Required after modifying any provider** — especially when changing from `Notifier` → `AsyncNotifier` or changing `keepAlive`. Always hot restart (not hot reload) after provider annotation changes.
+
 ---
 
 ## Key conventions
@@ -137,45 +139,45 @@ dart run build_runner watch --delete-conflicting-outputs
 - API calls → through `dioClientProvider` only — never add `Authorization` headers manually
 - Currency → `someDouble.toRupees()` extension — never format rupees manually
 - State updates → `ref.invalidate()` or `ref.read(provider.notifier).method()` — never `setState()`
+- Dates from backend are UTC — convert with `DateTime.parse('${e.date}T${e.time}:00Z').toLocal()` before comparing to device local date
 
 ---
 
-## Build status
+## Wiring status
 
-All screens are complete with mock data. Backend wiring is the next phase.
+### Done ✓
+| Feature | Endpoints |
+|---|---|
+| Auth | POST /auth/login, POST /auth/signup, POST /auth/logout, POST /auth/refresh |
+| Budget | GET /budget/current, POST /budget |
+| Expenses | GET /expenses, POST /expenses, POST /expenses/categorize (Claude Haiku) |
+| Settings (partial) | GET /user/profile, PUT /user/profile, PUT /user/preferences |
 
-**Frontend complete:**
-- [x] M3 theme — teal palette, shape tokens, component rules
-- [x] Auth screens — login, signup
-- [x] Main shell — bottom nav (Home, AI, Analytics, Expenses, Goals), FAB
-- [x] Home screen — daily budget header, budget card, stats, today's expenses, health score card, settings icon
-- [x] Add expense sheet — custom numpad, tag input, auto-categorize UI (category chip + confidence badge + picker grid)
-- [x] Budget setup — amount, period, currency, distribution mode (distribute / carryover)
-- [x] Expense history — grouped by date, search, category filter
-- [x] Analytics — budget card, days-left ring, min/max spend, category pie chart, calendar heatmap, CSV export
-- [x] Goals — featured card, small cards, summary strip
-- [x] Challenges — active challenges (progress bars) + available catalog (join button), inside goals tab
-- [x] Purchase advisor — item + price input, verdict card, budget impact, velocity, goal impact
-- [x] Chat coach — message history, input bar, mock responses
-- [x] Health score — home card (ring progress, status, factor dots) + detail screen (breakdown, 7-day trend, AI tips linked to challenges)
-- [x] Settings — inline profile editing, notification toggles, security, about, logout
+### Pending — next sessions
+| Feature | Endpoints | Notes |
+|---|---|---|
+| Analytics | GET /analytics/summary | Full screen on mock data |
+| Goals | GET /goals, POST /goals | Full screen on mock data |
+| Challenges | GET /challenges/active, GET /challenges/available, POST /challenges/:id/join | Mock data inside goals tab |
+| Health score | GET /health/score | Home card + detail screen on mock data |
+| Purchase advisor | POST /advisor/analyze | Full screen on mock data |
+| Chat coach | POST /chat/message | Full screen on mock data |
+| Settings — password | PUT /user/password | ⚠️ Blocked: backend 500 (see backlog) |
+| Expense delete | DELETE /expenses/:id | UI not implemented yet |
 
-**Backend wiring (pending):**
-- [ ] Auth — POST login/signup → store token → navigate
-- [ ] Budget — GET current, POST setup
-- [ ] Expenses — POST log, GET list, POST auto-categorize
-- [ ] Analytics — GET summary
-- [ ] Goals — GET list, POST create
-- [ ] Challenges — GET active/available, POST join
-- [ ] Purchase advisor — POST analyze
-- [ ] Health score — GET score
-- [ ] Chat — POST message
-- [ ] Settings — GET/PUT profile
+---
 
-See [`be-integration.md`](./be-integration.md) for the full backend API spec.
+## Known backlog / blockers
+
+| Issue | Root cause | Fix |
+|---|---|---|
+| Access token expires (1h) | Supabase JWT expiry default | Dashboard → Auth → Config: set JWT expiry to 86400. Turn off "Detect and revoke compromised refresh tokens" |
+| Change password returns 500 | Backend likely missing `SUPABASE_SERVICE_ROLE_KEY`, or `supabase.auth.admin` failing | Add service role key to `.env`, or refactor to use `supabase.auth.updateUser()` with session token instead of admin API |
+
+The token refresh interceptor is implemented in `lib/core/network/dio_client.dart` and will work correctly once the Supabase session settings are fixed.
 
 ---
 
 ## Backend integration
 
-All API contracts, request/response shapes, error codes, and wiring order are documented in [`be-integration.md`](./be-integration.md). Hand this file to the backend to ensure the API is built to exactly what the frontend expects.
+All API contracts, request/response shapes, error codes, and wiring order are documented in [`be-integration.md`](./be-integration.md).

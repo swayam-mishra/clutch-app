@@ -10,6 +10,7 @@ abstract final class AppConstants {
   // Secure storage keys
   static const String accessTokenKey = 'access_token';
   static const String refreshTokenKey = 'refresh_token';
+  static const String hasBudgetKey = 'has_budget';
 
   // Route paths
   static const String routeLogin = '/login';
