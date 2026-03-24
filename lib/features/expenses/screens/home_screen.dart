@@ -8,6 +8,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../budget/providers/budget_provider.dart';
 import '../../expenses/providers/expense_provider.dart';
+import '../../health/providers/health_provider.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
@@ -416,37 +417,42 @@ class HomeScreen extends ConsumerWidget {
   }
 }
 
-class _HealthScoreCard extends StatelessWidget {
+class _HealthScoreCard extends ConsumerWidget {
   const _HealthScoreCard();
 
-  static const int _score = 82;
+  Color _scoreColor(int score, ColorScheme cs) {
+    if (score >= 80) return cs.primary;
+    if (score >= 60) return cs.tertiary;
+    return cs.error;
+  }
+
+  Color _statusBg(String status, ColorScheme cs) {
+    switch (status) {
+      case 'doing well': return cs.primaryContainer;
+      case 'watch out': return cs.tertiaryContainer;
+      default: return cs.errorContainer;
+    }
+  }
+
+  Color _statusOn(String status, ColorScheme cs) {
+    switch (status) {
+      case 'doing well': return cs.onPrimaryContainer;
+      case 'watch out': return cs.onTertiaryContainer;
+      default: return cs.onErrorContainer;
+    }
+  }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
+    final healthAsync = ref.watch(healthNotifierProvider);
+    healthAsync.whenOrNull(error: (e, _) => debugPrint('[health] error: $e'));
+    final health = healthAsync.valueOrNull;
 
-    final Color progressColor;
-    final Color statusBg;
-    final Color statusOn;
-    final String statusLabel;
-
-    if (_score >= 80) {
-      progressColor = cs.primary;
-      statusBg = cs.primaryContainer;
-      statusOn = cs.onPrimaryContainer;
-      statusLabel = 'doing well';
-    } else if (_score >= 60) {
-      progressColor = cs.tertiary;
-      statusBg = cs.tertiaryContainer;
-      statusOn = cs.onTertiaryContainer;
-      statusLabel = 'watch out';
-    } else {
-      progressColor = cs.error;
-      statusBg = cs.errorContainer;
-      statusOn = cs.onErrorContainer;
-      statusLabel = 'off track';
-    }
+    final score = health?.score ?? 0;
+    final status = health?.status ?? '';
+    final progressColor = _scoreColor(score, cs);
 
     return GestureDetector(
       onTap: () => context.push(AppConstants.routeHealthScore),
@@ -456,71 +462,71 @@ class _HealthScoreCard extends StatelessWidget {
           color: cs.surfaceContainerHigh,
           borderRadius: BorderRadius.circular(12),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Text(
-                  'health score',
-                  style: tt.labelMedium?.copyWith(color: cs.onSurfaceVariant),
+        child: health == null
+            ? SizedBox(
+                height: 72,
+                child: Center(
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2, color: cs.primary),
                 ),
-                const Spacer(),
-                Text(
-                  '$_score',
-                  style: tt.titleLarge?.copyWith(
-                    color: cs.onSurface,
-                    fontWeight: FontWeight.w700,
+              )
+            : Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Text('health score',
+                          style: tt.labelMedium
+                              ?.copyWith(color: cs.onSurfaceVariant)),
+                      const Spacer(),
+                      Text('$score',
+                          style: tt.titleLarge?.copyWith(
+                              color: cs.onSurface,
+                              fontWeight: FontWeight.w700)),
+                      Text(' / 100',
+                          style: tt.labelSmall
+                              ?.copyWith(color: cs.onSurfaceVariant)),
+                      const SizedBox(width: 4),
+                      Icon(Icons.chevron_right_rounded,
+                          size: 18, color: cs.onSurfaceVariant),
+                    ],
                   ),
-                ),
-                Text(
-                  ' / 100',
-                  style: tt.labelSmall?.copyWith(color: cs.onSurfaceVariant),
-                ),
-                const SizedBox(width: 4),
-                Icon(
-                  Icons.chevron_right_rounded,
-                  size: 18,
-                  color: cs.onSurfaceVariant,
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            LinearProgressIndicator(
-              value: _score / 100,
-              backgroundColor: cs.surfaceContainerHighest,
-              valueColor: AlwaysStoppedAnimation<Color>(progressColor),
-              minHeight: 6,
-              borderRadius: BorderRadius.circular(4),
-            ),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: statusBg,
+                  const SizedBox(height: 10),
+                  LinearProgressIndicator(
+                    value: score / 100,
+                    backgroundColor: cs.surfaceContainerHighest,
+                    valueColor:
+                        AlwaysStoppedAnimation<Color>(progressColor),
+                    minHeight: 6,
                     borderRadius: BorderRadius.circular(4),
                   ),
-                  child: Text(
-                    statusLabel,
-                    style: tt.labelSmall?.copyWith(
-                      color: statusOn,
-                      fontWeight: FontWeight.w600,
-                    ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: _statusBg(status, cs),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(status,
+                            style: tt.labelSmall?.copyWith(
+                                color: _statusOn(status, cs),
+                                fontWeight: FontWeight.w600)),
+                      ),
+                      const Spacer(),
+                      ...health.factors.map((f) => Padding(
+                            padding: const EdgeInsets.only(left: 12),
+                            child: _FactorDot(
+                              label: f.title,
+                              color: _scoreColor(f.score, cs),
+                            ),
+                          )),
+                    ],
                   ),
-                ),
-                const Spacer(),
-                _FactorDot(label: 'adherence', color: cs.primary),
-                const SizedBox(width: 12),
-                _FactorDot(label: 'velocity', color: cs.tertiary),
-                const SizedBox(width: 12),
-                _FactorDot(label: 'streak', color: cs.primary),
-              ],
-            ),
-          ],
-        ),
+                ],
+              ),
       ),
     );
   }

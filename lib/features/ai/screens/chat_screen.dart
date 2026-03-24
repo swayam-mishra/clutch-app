@@ -1,25 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/network/dio_client.dart';
 import '../../../core/theme/app_theme.dart';
 
-const Map<String, String> _mockResponses = {
-  'default':
-      "based on your spending this month, you're using ₹194/day on average. you have 12 days left and ₹2,330 remaining — that's actually pretty tight.",
-  'budget':
-      "your march budget is ₹3,000. you've spent ₹670 so far — 22% in the first 19 days. you're slightly ahead of pace.",
-  'goals':
-      "your closest goal is the new phone (96% done, 38 days left). goa trip needs ₹6,500 more in 70 days — ₹93/day.",
-};
-
-class ChatScreen extends StatefulWidget {
+class ChatScreen extends ConsumerStatefulWidget {
   const ChatScreen({super.key});
 
   @override
-  State<ChatScreen> createState() => _ChatScreenState();
+  ConsumerState<ChatScreen> createState() => _ChatScreenState();
 }
 
-class _ChatScreenState extends State<ChatScreen> {
+class _ChatScreenState extends ConsumerState<ChatScreen> {
   final List<Map<String, dynamic>> _messages = [
     {
       'role': 'assistant',
@@ -30,6 +23,7 @@ class _ChatScreenState extends State<ChatScreen> {
   ];
   final _inputController = TextEditingController();
   final _scrollController = ScrollController();
+  bool _isTyping = false;
 
   @override
   void dispose() {
@@ -38,9 +32,9 @@ class _ChatScreenState extends State<ChatScreen> {
     super.dispose();
   }
 
-  void _sendMessage() {
+  Future<void> _sendMessage() async {
     final text = _inputController.text.trim();
-    if (text.isEmpty) return;
+    if (text.isEmpty || _isTyping) return;
 
     final now = TimeOfDay.now();
     final timeStr =
@@ -49,29 +43,43 @@ class _ChatScreenState extends State<ChatScreen> {
     setState(() {
       _messages.add({'role': 'user', 'text': text, 'time': timeStr});
       _inputController.clear();
+      _isTyping = true;
     });
-
     _scrollToBottom();
 
-    Future.delayed(const Duration(milliseconds: 800), () {
-      final lower = text.toLowerCase();
-      String response;
-      if (lower.contains('goal')) {
-        response = _mockResponses['goals']!;
-      } else if (lower.contains('budget')) {
-        response = _mockResponses['budget']!;
-      } else {
-        response = _mockResponses['default']!;
-      }
-      setState(() {
-        _messages.add({
-          'role': 'assistant',
-          'text': response,
-          'time': timeStr,
+    try {
+      // Build history — all messages except the one we just added
+      final history = _messages
+          .sublist(0, _messages.length - 1)
+          .map((m) => {'role': m['role'] as String, 'content': m['text'] as String})
+          .toList();
+
+      final res = await ref.read(dioClientProvider).post(
+        '/chat/message',
+        data: {'message': text, 'history': history},
+      );
+      final reply = res.data['data']['response'] as String;
+
+      if (mounted) {
+        setState(() {
+          _isTyping = false;
+          _messages.add({'role': 'assistant', 'text': reply, 'time': timeStr});
         });
-      });
-      _scrollToBottom();
-    });
+        _scrollToBottom();
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isTyping = false;
+          _messages.add({
+            'role': 'assistant',
+            'text': 'something went wrong — try again.',
+            'time': timeStr,
+          });
+        });
+        _scrollToBottom();
+      }
+    }
   }
 
   void _scrollToBottom() {
@@ -127,8 +135,11 @@ class _ChatScreenState extends State<ChatScreen> {
               controller: _scrollController,
               padding:
                   const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              itemCount: _messages.length,
+              itemCount: _messages.length + (_isTyping ? 1 : 0),
               itemBuilder: (context, index) {
+                if (index == _messages.length && _isTyping) {
+                  return _TypingBubble(cs: cs, tt: tt);
+                }
                 final message = _messages[index];
                 final isUser = message['role'] == 'user';
                 return _MessageBubble(
@@ -194,6 +205,35 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _TypingBubble extends StatelessWidget {
+  const _TypingBubble({required this.cs, required this.tt});
+  final ColorScheme cs;
+  final TextTheme tt;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 4, bottom: 4, right: 48),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: cs.surfaceContainerHigh,
+            borderRadius: const BorderRadius.only(
+              topLeft: Radius.circular(16),
+              topRight: Radius.circular(16),
+              bottomRight: Radius.circular(16),
+              bottomLeft: Radius.circular(4),
+            ),
+          ),
+          child: Text('...', style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant)),
+        ),
       ),
     );
   }

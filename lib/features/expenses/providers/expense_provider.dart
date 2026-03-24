@@ -1,6 +1,7 @@
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../../core/network/dio_client.dart';
+import '../../analytics/providers/analytics_provider.dart';
 import '../../budget/providers/budget_provider.dart';
 
 part 'expense_provider.g.dart';
@@ -75,8 +76,9 @@ class ExpenseNotifier extends _$ExpenseNotifier {
     final current = state.valueOrNull ?? [];
     state = AsyncValue.data([newExpense, ...current]);
 
-    // Budget numbers change — refetch
+    // Budget + analytics change — refetch both
     ref.invalidate(budgetNotifierProvider);
+    ref.invalidate(analyticsNotifierProvider);
   }
 
   Future<({String category, int confidence})> categorize(String tag) async {

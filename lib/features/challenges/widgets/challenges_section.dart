@@ -1,69 +1,37 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-final List<Map<String, dynamic>> activeChallenges = [
-  {
-    'id': 1,
-    'name': 'No Eating Out Week',
-    'description': 'Cook at home for 7 days straight',
-    'icon': Icons.no_meals_rounded,
-    'difficulty': 'medium',
-    'duration': '7 days',
-    'daysLeft': 4,
-    'totalDays': 7,
-    'progress': 0.43,
-    'reward': '₹500 saved badge',
-    'rewardIcon': Icons.emoji_events_rounded,
-    'color': 'primary',
-  },
-  {
-    'id': 2,
-    'name': '₹200/day Cap',
-    'description': 'Stay under ₹200 every day this week',
-    'icon': Icons.price_check_rounded,
-    'difficulty': 'hard',
-    'duration': '7 days',
-    'daysLeft': 2,
-    'totalDays': 7,
-    'progress': 0.71,
-    'reward': 'Budget Master badge',
-    'rewardIcon': Icons.military_tech_rounded,
-    'color': 'tertiary',
-  },
-];
+import '../providers/challenges_provider.dart';
 
-final List<Map<String, dynamic>> availableChallenges = [
-  {
-    'id': 3,
-    'name': '30-Day Savings Streak',
-    'description': 'Save something every day for 30 days',
-    'icon': Icons.local_fire_department_rounded,
-    'difficulty': 'hard',
-    'duration': '30 days',
-    'reward': 'Savings Streak badge',
-    'rewardIcon': Icons.workspace_premium_rounded,
-  },
-  {
-    'id': 4,
-    'name': 'Zero Impulse Week',
-    'description': 'No unplanned purchases for 7 days',
-    'icon': Icons.block_rounded,
-    'difficulty': 'medium',
-    'duration': '7 days',
-    'reward': 'Impulse Crusher badge',
-    'rewardIcon': Icons.shield_rounded,
-  },
-  {
-    'id': 5,
-    'name': 'Transport Saver',
-    'description': 'Cut transport spend by 50% this week',
-    'icon': Icons.directions_walk_rounded,
-    'difficulty': 'easy',
-    'duration': '7 days',
-    'reward': 'Green Commuter badge',
-    'rewardIcon': Icons.eco_rounded,
-  },
-];
+// ---------------------------------------------------------------------------
+// Icon mapping
+// ---------------------------------------------------------------------------
+
+IconData _challengeIcon(String key) {
+  const map = {
+    'no_meals': Icons.no_meals_rounded,
+    'price_check': Icons.price_check_rounded,
+    'local_fire_department': Icons.local_fire_department_rounded,
+    'block': Icons.block_rounded,
+    'directions_walk': Icons.directions_walk_rounded,
+    'emoji_events': Icons.emoji_events_rounded,
+    'military_tech': Icons.military_tech_rounded,
+    'workspace_premium': Icons.workspace_premium_rounded,
+    'shield': Icons.shield_rounded,
+    'eco': Icons.eco_rounded,
+    'savings': Icons.savings_rounded,
+    'trending_down': Icons.trending_down_rounded,
+    'restaurant': Icons.restaurant_rounded,
+    'coffee': Icons.coffee_rounded,
+    'shopping_bag': Icons.shopping_bag_rounded,
+    'directions_bus': Icons.directions_bus_rounded,
+  };
+  return map[key] ?? Icons.star_rounded;
+}
+
+// ---------------------------------------------------------------------------
+// Difficulty color helper
+// ---------------------------------------------------------------------------
 
 Color _difficultyColor(String d, ColorScheme cs) {
   switch (d) {
@@ -78,6 +46,10 @@ Color _difficultyColor(String d, ColorScheme cs) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// ChallengesSection
+// ---------------------------------------------------------------------------
+
 class ChallengesSection extends ConsumerWidget {
   const ChallengesSection({super.key});
 
@@ -85,74 +57,105 @@ class ChallengesSection extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
+    final challengesAsync = ref.watch(challengesNotifierProvider);
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Active challenges header
-        Row(
-          children: [
-            Text(
-              'active challenges',
-              style: tt.titleMedium?.copyWith(
-                color: cs.onSurface,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const Spacer(),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-              decoration: BoxDecoration(
-                color: cs.primaryContainer,
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: Text(
-                '${activeChallenges.length}',
-                style: tt.labelSmall?.copyWith(
-                  color: cs.onPrimaryContainer,
+    return challengesAsync.when(
+      loading: () => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 24),
+        child: Center(child: CircularProgressIndicator(color: cs.primary)),
+      ),
+      error: (_, err) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        child: Text('failed to load challenges',
+            style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
+      ),
+      data: (data) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Active challenges header
+          Row(
+            children: [
+              Text(
+                'active challenges',
+                style: tt.titleMedium?.copyWith(
+                  color: cs.onSurface,
                   fontWeight: FontWeight.w600,
                 ),
               ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-
-        // Active challenge cards
-        ...activeChallenges.map((c) => _ActiveChallengeCard(
-              challenge: c,
-              cs: cs,
-              tt: tt,
-            )),
-
-        const SizedBox(height: 24),
-
-        // Available challenges header
-        Row(
-          children: [
-            Text(
-              'available challenges',
-              style: tt.titleMedium?.copyWith(
-                color: cs.onSurface,
-                fontWeight: FontWeight.w600,
+              const Spacer(),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: cs.primaryContainer,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  '${data.active.length}',
+                  style: tt.labelSmall?.copyWith(
+                    color: cs.onPrimaryContainer,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ),
+            ],
+          ),
+          const SizedBox(height: 12),
+
+          if (data.active.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Text(
+                'no active challenges — join one below',
+                style:
+                    tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+              ),
+            )
+          else
+            ...data.active.map((c) => _ActiveChallengeCard(
+                  challenge: c,
+                  cs: cs,
+                  tt: tt,
+                )),
+
+          const SizedBox(height: 24),
+
+          // Available challenges header
+          Text(
+            'available challenges',
+            style: tt.titleMedium?.copyWith(
+              color: cs.onSurface,
+              fontWeight: FontWeight.w600,
             ),
-          ],
-        ),
-        const SizedBox(height: 12),
+          ),
+          const SizedBox(height: 12),
 
-        // Available challenge cards
-        ...availableChallenges.map((c) => _AvailableChallengeCard(
-              challenge: c,
-              cs: cs,
-              tt: tt,
-            )),
+          if (data.available.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Text(
+                'you\'ve joined all available challenges!',
+                style:
+                    tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+              ),
+            )
+          else
+            ...data.available.map((c) => _AvailableChallengeCard(
+                  challenge: c,
+                  cs: cs,
+                  tt: tt,
+                )),
 
-        const SizedBox(height: 80),
-      ],
+          const SizedBox(height: 80),
+        ],
+      ),
     );
   }
 }
+
+// ---------------------------------------------------------------------------
+// Active challenge card
+// ---------------------------------------------------------------------------
 
 class _ActiveChallengeCard extends StatelessWidget {
   const _ActiveChallengeCard({
@@ -161,17 +164,17 @@ class _ActiveChallengeCard extends StatelessWidget {
     required this.tt,
   });
 
-  final Map<String, dynamic> challenge;
+  final ActiveChallenge challenge;
   final ColorScheme cs;
   final TextTheme tt;
 
   @override
   Widget build(BuildContext context) {
-    final isPrimary = challenge['color'] == 'primary';
-    final bgColor = isPrimary ? cs.primaryContainer : cs.tertiaryContainer;
+    final isPrimary = challenge.color == 'primary';
+    final bgColor =
+        isPrimary ? cs.primaryContainer : cs.tertiaryContainer;
     final onColor =
         isPrimary ? cs.onPrimaryContainer : cs.onTertiaryContainer;
-    final progress = challenge['progress'] as double;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
@@ -192,30 +195,21 @@ class _ActiveChallengeCard extends StatelessWidget {
                   color: Colors.white.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: Icon(
-                  challenge['icon'] as IconData,
-                  color: onColor,
-                  size: 20,
-                ),
+                child: Icon(_challengeIcon(challenge.iconKey),
+                    color: onColor, size: 20),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      challenge['name'] as String,
-                      style: tt.titleSmall?.copyWith(
-                        color: onColor,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    Text(
-                      challenge['description'] as String,
-                      style: tt.labelSmall?.copyWith(
-                        color: onColor.withValues(alpha: 0.7),
-                      ),
-                    ),
+                    Text(challenge.name,
+                        style: tt.titleSmall?.copyWith(
+                            color: onColor,
+                            fontWeight: FontWeight.w600)),
+                    Text(challenge.description,
+                        style: tt.labelSmall?.copyWith(
+                            color: onColor.withValues(alpha: 0.7))),
                   ],
                 ),
               ),
@@ -230,28 +224,22 @@ class _ActiveChallengeCard extends StatelessWidget {
                       color: Colors.white.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(4),
                     ),
-                    child: Text(
-                      challenge['difficulty'] as String,
-                      style: tt.labelSmall?.copyWith(
-                        color: onColor,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
+                    child: Text(challenge.difficulty,
+                        style: tt.labelSmall?.copyWith(
+                            color: onColor,
+                            fontWeight: FontWeight.w600)),
                   ),
                   const SizedBox(height: 4),
-                  Text(
-                    '${challenge['daysLeft']}d left',
-                    style: tt.labelSmall?.copyWith(
-                      color: onColor.withValues(alpha: 0.7),
-                    ),
-                  ),
+                  Text('${challenge.daysLeft}d left',
+                      style: tt.labelSmall?.copyWith(
+                          color: onColor.withValues(alpha: 0.7))),
                 ],
               ),
             ],
           ),
           const SizedBox(height: 12),
           LinearProgressIndicator(
-            value: progress,
+            value: challenge.progress.clamp(0.0, 1.0),
             backgroundColor: Colors.white.withValues(alpha: 0.2),
             valueColor: AlwaysStoppedAnimation<Color>(onColor),
             minHeight: 6,
@@ -260,26 +248,16 @@ class _ActiveChallengeCard extends StatelessWidget {
           const SizedBox(height: 8),
           Row(
             children: [
-              Icon(
-                challenge['rewardIcon'] as IconData,
-                size: 14,
-                color: onColor.withValues(alpha: 0.7),
-              ),
+              Icon(_challengeIcon(challenge.rewardIconKey),
+                  size: 14, color: onColor.withValues(alpha: 0.7)),
               const SizedBox(width: 6),
-              Text(
-                challenge['reward'] as String,
-                style: tt.labelSmall?.copyWith(
-                  color: onColor.withValues(alpha: 0.7),
-                ),
-              ),
+              Text(challenge.reward ?? '',
+                  style: tt.labelSmall
+                      ?.copyWith(color: onColor.withValues(alpha: 0.7))),
               const Spacer(),
-              Text(
-                '${(progress * 100).toInt()}%',
-                style: tt.labelSmall?.copyWith(
-                  color: onColor,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
+              Text('${(challenge.progress * 100).toInt()}%',
+                  style: tt.labelSmall?.copyWith(
+                      color: onColor, fontWeight: FontWeight.w600)),
             ],
           ),
         ],
@@ -288,20 +266,24 @@ class _ActiveChallengeCard extends StatelessWidget {
   }
 }
 
-class _AvailableChallengeCard extends StatelessWidget {
+// ---------------------------------------------------------------------------
+// Available challenge card
+// ---------------------------------------------------------------------------
+
+class _AvailableChallengeCard extends ConsumerWidget {
   const _AvailableChallengeCard({
     required this.challenge,
     required this.cs,
     required this.tt,
   });
 
-  final Map<String, dynamic> challenge;
+  final AvailableChallenge challenge;
   final ColorScheme cs;
   final TextTheme tt;
 
   @override
-  Widget build(BuildContext context) {
-    final difficulty = challenge['difficulty'] as String;
+  Widget build(BuildContext context, WidgetRef ref) {
+    final difficulty = challenge.difficulty;
     final diffColor = _difficultyColor(difficulty, cs);
 
     return Container(
@@ -323,24 +305,18 @@ class _AvailableChallengeCard extends StatelessWidget {
                   color: cs.secondaryContainer,
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: Icon(
-                  challenge['icon'] as IconData,
-                  color: cs.onSecondaryContainer,
-                  size: 20,
-                ),
+                child: Icon(_challengeIcon(challenge.iconKey),
+                    color: cs.onSecondaryContainer, size: 20),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      challenge['name'] as String,
-                      style: tt.titleSmall?.copyWith(
-                        color: cs.onSurface,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
+                    Text(challenge.name,
+                        style: tt.titleSmall?.copyWith(
+                            color: cs.onSurface,
+                            fontWeight: FontWeight.w600)),
                     const SizedBox(height: 4),
                     Container(
                       padding: const EdgeInsets.symmetric(
@@ -349,23 +325,17 @@ class _AvailableChallengeCard extends StatelessWidget {
                         color: diffColor.withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(4),
                       ),
-                      child: Text(
-                        difficulty,
-                        style: tt.labelSmall?.copyWith(
-                          color: diffColor,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
+                      child: Text(difficulty,
+                          style: tt.labelSmall?.copyWith(
+                              color: diffColor,
+                              fontWeight: FontWeight.w600)),
                     ),
                     const SizedBox(height: 2),
-                    Text(
-                      challenge['description'] as String,
-                      style: tt.labelSmall?.copyWith(
-                        color: cs.onSurfaceVariant,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
+                    Text(challenge.description,
+                        style: tt.labelSmall
+                            ?.copyWith(color: cs.onSurfaceVariant),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis),
                   ],
                 ),
               ),
@@ -375,15 +345,14 @@ class _AvailableChallengeCard extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text(
-                    challenge['duration'] as String,
-                    style: tt.labelSmall?.copyWith(
-                      color: cs.onSurfaceVariant,
-                    ),
-                  ),
+                  Text(challenge.duration,
+                      style: tt.labelSmall
+                          ?.copyWith(color: cs.onSurfaceVariant)),
                   const SizedBox(height: 6),
                   GestureDetector(
-                    onTap: () => print('join challenge ${challenge['id']}'),
+                    onTap: () => ref
+                        .read(challengesNotifierProvider.notifier)
+                        .joinChallenge(challenge.id),
                     child: Container(
                       padding: const EdgeInsets.symmetric(
                           horizontal: 12, vertical: 6),
@@ -391,13 +360,10 @@ class _AvailableChallengeCard extends StatelessWidget {
                         color: cs.secondaryContainer,
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      child: Text(
-                        'join',
-                        style: tt.labelMedium?.copyWith(
-                          color: cs.onSecondaryContainer,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
+                      child: Text('join',
+                          style: tt.labelMedium?.copyWith(
+                              color: cs.onSecondaryContainer,
+                              fontWeight: FontWeight.w600)),
                     ),
                   ),
                 ],
@@ -407,18 +373,12 @@ class _AvailableChallengeCard extends StatelessWidget {
           const SizedBox(height: 10),
           Row(
             children: [
-              Icon(
-                challenge['rewardIcon'] as IconData,
-                size: 12,
-                color: cs.primary,
-              ),
+              Icon(_challengeIcon(challenge.rewardIconKey),
+                  size: 12, color: cs.primary),
               const SizedBox(width: 4),
-              Text(
-                challenge['reward'] as String,
-                style: tt.labelSmall?.copyWith(
-                  color: cs.onSurfaceVariant,
-                ),
-              ),
+              Text(challenge.reward ?? '',
+                  style: tt.labelSmall
+                      ?.copyWith(color: cs.onSurfaceVariant)),
             ],
           ),
         ],
