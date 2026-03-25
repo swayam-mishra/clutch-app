@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../../core/theme/app_theme.dart';
 
 class ClutchButton extends StatelessWidget {
   const ClutchButton({
@@ -16,15 +15,22 @@ class ClutchButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ElevatedButton(
+    final cs = Theme.of(context).colorScheme;
+    return FilledButton(
       onPressed: loading ? null : onPressed,
+      style: FilledButton.styleFrom(
+        minimumSize: const Size(double.infinity, 52),
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(16)),
+        ),
+      ),
       child: loading
-          ? const SizedBox(
+          ? SizedBox(
               height: 20,
               width: 20,
               child: CircularProgressIndicator(
                 strokeWidth: 2,
-                color: AppTheme.background,
+                color: cs.onPrimary,
               ),
             )
           : Text(label),

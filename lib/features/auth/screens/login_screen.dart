@@ -126,14 +126,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               // Forgot password
               Align(
                 alignment: Alignment.centerRight,
-                child: GestureDetector(
-                  onTap: () {},
+                child: TextButton(
+                  onPressed: () {},
+                  style: TextButton.styleFrom(
+                    padding: EdgeInsets.zero,
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
                   child: Text(
                     'forgot password?',
-                    style: tt.labelSmall?.copyWith(
-                      color: AppTheme.accent,
-                      fontSize: 12,
-                    ),
+                    style: tt.labelSmall?.copyWith(color: AppTheme.accent),
                   ),
                 ),
               ),
@@ -190,7 +192,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 style: OutlinedButton.styleFrom(
                   foregroundColor: AppTheme.textPrimary,
                   minimumSize: const Size(double.infinity, 52),
-                  side: const BorderSide(color: Color(0xFF89938E), width: 1),
+                  side: BorderSide(color: cs.outline, width: 1),
                   shape: const RoundedRectangleBorder(
                     borderRadius: BorderRadius.all(Radius.circular(16)),
                   ),

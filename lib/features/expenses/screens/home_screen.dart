@@ -5,10 +5,14 @@ import 'package:intl/intl.dart';
 
 import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../shared/extensions/currency_extension.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../budget/providers/budget_provider.dart';
+import '../../budget/providers/daily_closeout_provider.dart';
+import '../../budget/widgets/daily_closeout_sheet.dart';
 import '../../expenses/providers/expense_provider.dart';
 import '../../health/providers/health_provider.dart';
+import '../../home/screens/main_shell.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
@@ -84,7 +88,7 @@ class HomeScreen extends ConsumerWidget {
                     const Spacer(),
                     IconButton(
                       onPressed: () =>
-                          context.push(AppConstants.routeSettings),
+                          ref.read(shellTabIndexProvider.notifier).set(4),
                       icon: const Icon(Icons.settings_rounded, size: 22),
                       visualDensity: VisualDensity.compact,
                       style: IconButton.styleFrom(
@@ -128,7 +132,7 @@ class HomeScreen extends ConsumerWidget {
                       children: [
                         Text(
                           budget != null
-                              ? '₹${budget.dailyRemaining.toInt()}'
+                              ? budget.dailyRemaining.toRupees()
                               : '—',
                           style: textTheme.headlineLarge?.copyWith(
                             color: colorScheme.primary,
@@ -147,8 +151,8 @@ class HomeScreen extends ConsumerWidget {
                 ),
               ),
 
-              // 2. Spacing
-              const SizedBox(height: 8),
+              // 2. Pending savings banner (shown if savings rolled over)
+              _PendingSavingsBanner(),
 
               // 3. Monthly budget card
               Container(
@@ -196,7 +200,7 @@ class HomeScreen extends ConsumerWidget {
                     const SizedBox(height: 8),
                     Text(
                       budget != null
-                          ? '₹${budget.amount.toInt()}'
+                          ? budget.amount.toRupees()
                           : '—',
                       style: textTheme.displaySmall?.copyWith(
                         color: colorScheme.onSurface,
@@ -206,7 +210,7 @@ class HomeScreen extends ConsumerWidget {
                     const SizedBox(height: 4),
                     Text(
                       budget != null
-                          ? '₹${budget.totalSpent.toInt()} spent · ${(budget.spentFraction * 100).toInt()}% used'
+                          ? '${budget.totalSpent.toRupees()} spent · ${(budget.spentFraction * 100).toInt()}% used'
                           : '—',
                       style: textTheme.bodySmall?.copyWith(
                         color: colorScheme.onSurfaceVariant,
@@ -245,7 +249,7 @@ class HomeScreen extends ConsumerWidget {
                           children: [
                             Text(
                               budget != null
-                                  ? '₹${budget.remainingBudget.toInt()}'
+                                  ? budget.remainingBudget.toRupees()
                                   : '—',
                               style: textTheme.titleLarge?.copyWith(
                                 color: colorScheme.onSurface,
@@ -315,7 +319,7 @@ class HomeScreen extends ConsumerWidget {
                             const SizedBox(height: 4),
                             Text(
                               budget != null
-                                  ? '₹${budget.dailyLimit.toInt()}/day'
+                                  ? '${budget.dailyLimit.toRupees()}/day'
                                   : '—',
                               style: textTheme.labelSmall?.copyWith(
                                 color: colorScheme.primary,
@@ -351,7 +355,7 @@ class HomeScreen extends ConsumerWidget {
                     ),
                     const Spacer(),
                     TextButton(
-                      onPressed: () => debugPrint('see all'),
+                      onPressed: () => ref.read(shellTabIndexProvider.notifier).set(3),
                       style: TextButton.styleFrom(
                         padding: EdgeInsets.zero,
                         minimumSize: Size.zero,
@@ -385,7 +389,7 @@ class HomeScreen extends ConsumerWidget {
                       icon: _categoryIcon(e.category),
                       title: e.tag,
                       subtitle: e.category.toLowerCase(),
-                      amount: '₹${e.amount.toInt()}',
+                      amount: e.amount.toRupees(),
                       colorScheme: colorScheme,
                       textTheme: textTheme,
                     )),
@@ -398,7 +402,7 @@ class HomeScreen extends ConsumerWidget {
                     children: [
                       const Spacer(),
                       Text(
-                        'day total: ₹${dayTotal.toInt()}',
+                        'day total: ${dayTotal.toRupees()}',
                         style: textTheme.labelMedium?.copyWith(
                           color: colorScheme.onSurfaceVariant,
                         ),
@@ -413,6 +417,61 @@ class HomeScreen extends ConsumerWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// _PendingSavingsBanner
+// ---------------------------------------------------------------------------
+
+class _PendingSavingsBanner extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    final summaryAsync = ref.watch(dailySummaryNotifierProvider);
+
+    return summaryAsync.maybeWhen(
+      data: (summary) {
+        // Only show banner if there are pending savings but closeout already
+        // happened today (or needsCloseout is false) — avoids double-showing
+        // alongside the auto-triggered sheet.
+        if (summary.pendingSavings <= 0 || summary.needsCloseout) {
+          return const SizedBox(height: 8);
+        }
+        return GestureDetector(
+          onTap: () => showModalBottomSheet(
+            context: context,
+            isScrollControlled: true,
+            backgroundColor: Colors.transparent,
+            barrierColor: cs.scrim.withValues(alpha: 0.32),
+            builder: (_) => DailyCloseoutSheet(summary: summary),
+          ),
+          child: Container(
+            margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: cs.primaryContainer,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.savings_rounded, color: cs.onPrimaryContainer, size: 18),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    '${summary.pendingSavings.toRupees()} saved up — allocate to goals',
+                    style: tt.labelMedium?.copyWith(color: cs.onPrimaryContainer),
+                  ),
+                ),
+                Icon(Icons.chevron_right_rounded, color: cs.onPrimaryContainer, size: 18),
+              ],
+            ),
+          ),
+        );
+      },
+      orElse: () => const SizedBox(height: 8),
     );
   }
 }

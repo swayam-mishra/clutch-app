@@ -171,8 +171,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                               ),
                               child: Text(
                                 cat,
-                                style: TextStyle(
-                                  fontSize: 13,
+                                style: tt.labelMedium?.copyWith(
                                   fontWeight: isSelected
                                       ? FontWeight.w600
                                       : FontWeight.w400,
@@ -312,7 +311,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                                 ),
                               ],
                             ),
-                            onTap: () => debugPrint('tapped ${expense.tag}'),
+                            onTap: null,
                           ),
                         ),
                       );
