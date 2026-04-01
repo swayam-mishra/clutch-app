@@ -232,15 +232,15 @@ class _AddExpenseSheetState extends ConsumerState<AddExpenseSheet> {
               filled: true,
               fillColor: cs.surfaceContainerHighest,
               border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(16),
                 borderSide: BorderSide.none,
               ),
               enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(16),
                 borderSide: BorderSide.none,
               ),
               focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(16),
                 borderSide: BorderSide.none,
               ),
             ),
@@ -265,7 +265,7 @@ class _AddExpenseSheetState extends ConsumerState<AddExpenseSheet> {
                               horizontal: 12, vertical: 10),
                           decoration: BoxDecoration(
                             color: chipBg,
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: BorderRadius.circular(16),
                           ),
                           child: Row(
                             children: [
@@ -301,7 +301,7 @@ class _AddExpenseSheetState extends ConsumerState<AddExpenseSheet> {
                                       horizontal: 6, vertical: 2),
                                   decoration: BoxDecoration(
                                     color: Colors.white.withValues(alpha: 0.18),
-                                    borderRadius: BorderRadius.circular(4),
+                                    borderRadius: BorderRadius.circular(8),
                                   ),
                                   child: Text(
                                     isOverridden
@@ -480,7 +480,7 @@ class _NumButton extends StatelessWidget {
         height: 56,
         decoration: BoxDecoration(
           color: cs.surfaceContainerHigh,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(16),
         ),
         alignment: Alignment.center,
         child: Text(
@@ -508,7 +508,7 @@ class _BackspaceButton extends StatelessWidget {
         height: 56,
         decoration: BoxDecoration(
           color: cs.surfaceContainerHigh,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(16),
         ),
         alignment: Alignment.center,
         child: Icon(
@@ -539,7 +539,7 @@ class _ConfirmButton extends StatelessWidget {
         height: 56,
         decoration: BoxDecoration(
           color: cs.primary,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(16),
         ),
         alignment: Alignment.center,
         child: isLoading

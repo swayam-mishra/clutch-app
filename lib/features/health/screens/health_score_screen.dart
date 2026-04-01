@@ -272,7 +272,7 @@ class HealthScoreScreen extends ConsumerWidget {
                           horizontal: 8, vertical: 2),
                       decoration: BoxDecoration(
                         color: cs.tertiaryContainer,
-                        borderRadius: BorderRadius.circular(4),
+                        borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text('ai',
                           style: tt.labelSmall?.copyWith(
@@ -330,7 +330,7 @@ class _FactorCard extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: cs.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -382,7 +382,7 @@ class _FactorCard extends StatelessWidget {
             backgroundColor: cs.surfaceContainerHighest,
             valueColor: AlwaysStoppedAnimation<Color>(scoreColor),
             minHeight: 5,
-            borderRadius: BorderRadius.circular(4),
+            borderRadius: BorderRadius.circular(8),
           ),
           const SizedBox(height: 8),
           Text(factor.description,
@@ -413,7 +413,7 @@ class _TipCard extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: cs.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

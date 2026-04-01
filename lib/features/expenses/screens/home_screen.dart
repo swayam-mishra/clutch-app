@@ -1,677 +1,580 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
 
 import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../shared/extensions/currency_extension.dart';
-import '../../auth/providers/auth_provider.dart';
-import '../../budget/providers/budget_provider.dart';
-import '../../budget/providers/daily_closeout_provider.dart';
-import '../../budget/widgets/daily_closeout_sheet.dart';
+import '../../../shared/widgets/animated_number.dart';
+import '../../../shared/widgets/budget_pill.dart';
+import '../../../shared/widgets/clutch_keyboard.dart';
 import '../../expenses/providers/expense_provider.dart';
-import '../../health/providers/health_provider.dart';
-import '../../home/screens/main_shell.dart';
 
-class HomeScreen extends ConsumerWidget {
+// ── Category data (shared with add_expense_sheet.dart) ───────────────────────
+
+typedef _Cat = ({String category, String short, IconData icon});
+
+const List<_Cat> _kCategories = [
+  (category: 'Food & Dining', short: 'food', icon: Icons.restaurant_rounded),
+  (category: 'Transport', short: 'transport', icon: Icons.directions_car_rounded),
+  (category: 'Shopping', short: 'shopping', icon: Icons.shopping_bag_rounded),
+  (category: 'Entertainment', short: 'fun', icon: Icons.movie_rounded),
+  (category: 'Health', short: 'health', icon: Icons.favorite_rounded),
+  (category: 'Bills', short: 'bills', icon: Icons.receipt_rounded),
+  (category: 'Education', short: 'edu', icon: Icons.school_rounded),
+  (category: 'Other', short: 'other', icon: Icons.category_rounded),
+];
+
+// ── HomeScreen ────────────────────────────────────────────────────────────────
+
+class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
-  static IconData _categoryIcon(String category) {
-    switch (category) {
-      case 'Food & Dining':
-        return Icons.restaurant_rounded;
-      case 'Transport':
-        return Icons.directions_car_rounded;
-      case 'Shopping':
-        return Icons.shopping_bag_rounded;
-      case 'Entertainment':
-        return Icons.movie_rounded;
-      case 'Health':
-        return Icons.favorite_rounded;
-      case 'Bills':
-        return Icons.receipt_rounded;
-      case 'Education':
-        return Icons.school_rounded;
-      default:
-        return Icons.category_rounded;
-    }
-  }
+  @override
+  ConsumerState<HomeScreen> createState() => _HomeScreenState();
+}
 
-  static String _periodLabel(String isoDate) {
-    final parts = isoDate.split('-');
-    if (parts.length < 2) return '';
-    final dt = DateTime(int.parse(parts[0]), int.parse(parts[1]));
-    return DateFormat('MMMM yyyy').format(dt).toLowerCase();
+class _HomeScreenState extends ConsumerState<HomeScreen> {
+  // ── Keyboard / entry state ──────────────────────────────────────────────────
+  String _amount = '';
+  final TextEditingController _tagController = TextEditingController();
+  String? _overrideCategory;
+  bool _showPicker = false;
+  bool _isLogging = false;
+
+  // AI categorization
+  String? _predictedCategory;
+  IconData? _predictedIcon;
+  int? _predictedConfidence;
+  bool _isCategorizing = false;
+  Timer? _debounceTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _tagController.addListener(_onTagChanged);
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
-    final auth = ref.watch(authNotifierProvider);
-    final firstName =
-        (auth.userName ?? 'there').split(' ').first.toLowerCase();
-    final budget = ref.watch(budgetNotifierProvider).valueOrNull;
-    final allExpenses = ref.watch(expenseNotifierProvider).valueOrNull ?? [];
-    final now = DateTime.now();
-    final todayExpenses = allExpenses.where((e) {
-      final local = DateTime.parse('${e.date}T${e.time}:00Z').toLocal();
-      return local.year == now.year &&
-          local.month == now.month &&
-          local.day == now.day;
-    }).toList();
-    final dayTotal =
-        todayExpenses.fold<double>(0, (sum, e) => sum + e.amount);
-    final dateLabel =
-        DateFormat('EEEE, d MMMM').format(DateTime.now()).toLowerCase();
+  void dispose() {
+    _debounceTimer?.cancel();
+    _tagController.removeListener(_onTagChanged);
+    _tagController.dispose();
+    super.dispose();
+  }
+
+  // ── Keyboard handlers ───────────────────────────────────────────────────────
+
+  void _appendDigit(String d) {
+    if (_amount.length >= 8) return;
+    if (d == '.' && _amount.contains('.')) return;
+    if (d == '.' && _amount.isEmpty) return;
+    setState(() => _amount += d);
+  }
+
+  void _backspace() {
+    if (_amount.isEmpty) return;
+    setState(() => _amount = _amount.substring(0, _amount.length - 1));
+  }
+
+  Future<void> _confirm() async {
+    final amount = double.tryParse(_amount) ?? 0;
+    if (amount <= 0) return;
+
+    final tag = _tagController.text.trim();
+    final finalCategory = _overrideCategory ?? _predictedCategory ?? 'Other';
+    final confidence =
+        _overrideCategory != null ? 100 : (_predictedConfidence ?? 100);
+
+    setState(() => _isLogging = true);
+    try {
+      await ref.read(expenseNotifierProvider.notifier).logExpense(
+            amount: amount,
+            tag: tag.isNotEmpty ? tag : 'expense',
+            category: finalCategory,
+            confidence: confidence,
+          );
+      if (mounted) {
+        setState(() {
+          _amount = '';
+          _overrideCategory = null;
+          _predictedCategory = null;
+          _predictedIcon = null;
+          _predictedConfidence = null;
+          _isLogging = false;
+          _showPicker = false;
+        });
+        _tagController.clear();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${amount.toRupees()} logged'),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _isLogging = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('failed to log expense')),
+        );
+      }
+    }
+  }
+
+  // ── Ask Clutch ──────────────────────────────────────────────────────────────
+
+  void _askClutch() {
+    final amount = double.tryParse(_amount) ?? 0;
+    if (amount <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('enter an amount first')),
+      );
+      return;
+    }
+    final item = _tagController.text.trim();
+    final uri = Uri(
+      path: AppConstants.routePurchaseAdvisor,
+      queryParameters: {
+        'amount': _amount,
+        if (item.isNotEmpty) 'item': item,
+      },
+    ).toString();
+    context.push(uri);
+  }
+
+  // ── AI categorization ───────────────────────────────────────────────────────
+
+  void _onTagChanged() {
+    setState(() => _overrideCategory = null);
+    _debounceTimer?.cancel();
+    final tag = _tagController.text.trim();
+    if (tag.isEmpty) {
+      setState(() {
+        _predictedCategory = null;
+        _predictedIcon = null;
+        _predictedConfidence = null;
+        _isCategorizing = false;
+      });
+      return;
+    }
+    setState(() => _isCategorizing = true);
+    _debounceTimer = Timer(
+      const Duration(milliseconds: 600),
+      () => _categorize(tag),
+    );
+  }
+
+  Future<void> _categorize(String tag) async {
+    try {
+      final result =
+          await ref.read(expenseNotifierProvider.notifier).categorize(tag);
+      final match = _kCategories.firstWhere(
+        (c) => c.category == result.category,
+        orElse: () => _kCategories.last,
+      );
+      if (mounted) {
+        setState(() {
+          _predictedCategory = result.category;
+          _predictedIcon = match.icon;
+          _predictedConfidence = result.confidence;
+          _isCategorizing = false;
+          if (result.confidence < 70) _showPicker = true;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _isCategorizing = false);
+    }
+  }
+
+  // ── Build ───────────────────────────────────────────────────────────────────
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+
+    final enteredAmount = double.tryParse(_amount) ?? 0.0;
+    final hasTag = _tagController.text.isNotEmpty;
+
+    // Category chip state
+    final isOverridden = _overrideCategory != null;
+    final displayCategory = _overrideCategory ?? _predictedCategory;
+    final displayIcon = isOverridden
+        ? _kCategories
+            .firstWhere((c) => c.category == _overrideCategory,
+                orElse: () => _kCategories.last)
+            .icon
+        : _predictedIcon;
+    final confidence = isOverridden ? null : _predictedConfidence;
+    final isHighConfidence = confidence != null && confidence >= 80;
+
+    final chipBg = isOverridden
+        ? cs.secondaryContainer
+        : isHighConfidence
+            ? cs.primaryContainer
+            : cs.tertiaryContainer;
+    final chipOn = isOverridden
+        ? cs.onSecondaryContainer
+        : isHighConfidence
+            ? cs.onPrimaryContainer
+            : cs.onTertiaryContainer;
+
+    final isSystemKeyboardVisible = MediaQuery.of(context).viewInsets.bottom > 0;
 
     return Scaffold(
       backgroundColor: AppTheme.background,
       body: SafeArea(
-        child: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Top bar — greeting + settings
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 8, 0),
-                child: Row(
-                  children: [
-                    Text(
-                      'hi, $firstName',
-                      style: textTheme.titleMedium?.copyWith(
-                        color: colorScheme.onSurface,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const Spacer(),
-                    IconButton(
-                      onPressed: () =>
-                          ref.read(shellTabIndexProvider.notifier).set(4),
-                      icon: const Icon(Icons.settings_rounded, size: 22),
-                      visualDensity: VisualDensity.compact,
-                      style: IconButton.styleFrom(
-                        foregroundColor: colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              // 1. "For today" header
-              Container(
-                margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // ── ZONE A: Editor (~45% of screen height) ──────────────────────
+            Expanded(
+              flex: 4,
+              child: DecoratedBox(
                 decoration: BoxDecoration(
-                  color: colorScheme.surfaceContainerLow,
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'for today',
-                          style: textTheme.labelMedium?.copyWith(
-                            color: colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                        Text(
-                          dateLabel,
-                          style: textTheme.labelLarge?.copyWith(
-                            color: colorScheme.onSurface,
-                          ),
-                        ),
-                      ],
-                    ),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Text(
-                          budget != null
-                              ? budget.dailyRemaining.toRupees()
-                              : '—',
-                          style: textTheme.headlineLarge?.copyWith(
-                            color: colorScheme.primary,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        Text(
-                          'left today',
-                          style: textTheme.labelSmall?.copyWith(
-                            color: colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-
-              // 2. Pending savings banner (shown if savings rolled over)
-              _PendingSavingsBanner(),
-
-              // 3. Monthly budget card
-              Container(
-                margin: const EdgeInsets.symmetric(horizontal: 16),
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: colorScheme.surfaceContainerHigh,
-                  borderRadius: BorderRadius.circular(12),
+                  color: AppTheme.surface,
+                  borderRadius: const BorderRadius.only(
+                    bottomLeft: Radius.circular(28),
+                    bottomRight: Radius.circular(28),
+                  ),
                 ),
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Row(
-                          children: [
-                            Text(
-                              'monthly budget',
-                              style: textTheme.bodySmall?.copyWith(
-                                color: colorScheme.onSurfaceVariant,
-                              ),
+                    // Pill + gear header (pinned to top)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 8, 4),
+                      child: Row(
+                        children: [
+                          const Expanded(child: BudgetPill()),
+                          const SizedBox(width: 8),
+                          IconButton(
+                            onPressed: () => context.push(AppConstants.routeSettings),
+                            icon: const Icon(Icons.settings_rounded, size: 22),
+                            visualDensity: VisualDensity.compact,
+                            style: IconButton.styleFrom(
+                              foregroundColor: cs.onSurfaceVariant,
                             ),
-                            const SizedBox(width: 2),
-                            GestureDetector(
-                              onTap: () => context.push(AppConstants.routeBudgetSetup),
-                              child: Icon(
-                                Icons.edit_outlined,
-                                size: 16,
-                                color: colorScheme.onSurfaceVariant,
-                              ),
-                            ),
-                          ],
-                        ),
-                        Text(
-                          budget != null
-                              ? _periodLabel(budget.startDate)
-                              : '—',
-                          style: textTheme.labelSmall?.copyWith(
-                            color: colorScheme.onSurfaceVariant,
                           ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      budget != null
-                          ? budget.amount.toRupees()
-                          : '—',
-                      style: textTheme.displaySmall?.copyWith(
-                        color: colorScheme.onSurface,
-                        fontWeight: FontWeight.w700,
+                        ],
                       ),
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      budget != null
-                          ? '${budget.totalSpent.toRupees()} spent · ${(budget.spentFraction * 100).toInt()}% used'
-                          : '—',
-                      style: textTheme.bodySmall?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    LinearProgressIndicator(
-                      value: budget?.spentFraction ?? 0,
-                      backgroundColor: colorScheme.surfaceContainerHighest,
-                      valueColor: AlwaysStoppedAnimation<Color>(colorScheme.primary),
-                      borderRadius: BorderRadius.circular(4),
-                      minHeight: 4,
-                    ),
-                  ],
-                ),
-              ),
 
-              // 4. Spacing
-              const SizedBox(height: 8),
-
-              // 5. Stats row
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Row(
-                  children: [
-                    // Card 1 — Remaining
+                    // Amount display + blinking cursor — right-aligned
                     Expanded(
-                      child: Container(
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: colorScheme.surfaceContainer,
-                          borderRadius: BorderRadius.circular(12),
+                      child: Padding(
+                        padding: const EdgeInsets.only(right: 32),
+                        child: Align(
+                          alignment: Alignment.centerRight,
+                          child: _amount.isEmpty && !isSystemKeyboardVisible
+                              ? _BlinkingCursor(color: cs.primary)
+                              : AnimatedNumber(
+                                  value: enteredAmount,
+                                  style: tt.displayLarge!.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                    color: cs.onSurface,
+                                  ),
+                                  emptyText: '',
+                                ),
                         ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              budget != null
-                                  ? budget.remainingBudget.toRupees()
-                                  : '—',
-                              style: textTheme.titleLarge?.copyWith(
-                                color: colorScheme.onSurface,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                            Text(
-                              'remaining',
-                              style: textTheme.labelSmall?.copyWith(
-                                color: colorScheme.onSurfaceVariant,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 2,
-                              ),
-                              decoration: BoxDecoration(
-                                color: (budget?.isOnTrack ?? true)
-                                    ? colorScheme.primaryContainer
-                                    : colorScheme.errorContainer,
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: Text(
-                                (budget?.isOnTrack ?? true)
-                                    ? 'on track'
-                                    : 'over budget',
-                                style: textTheme.labelSmall?.copyWith(
-                                  color: (budget?.isOnTrack ?? true)
-                                      ? colorScheme.onPrimaryContainer
-                                      : colorScheme.onErrorContainer,
+                      ),
+                    ),
+
+                  // Tag field — slides in after first digit typed
+                  AnimatedSize(
+                    duration: const Duration(milliseconds: 180),
+                    curve: Curves.easeOut,
+                    child: _amount.isNotEmpty
+                        ? Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                            child: TextField(
+                              controller: _tagController,
+                              textCapitalization: TextCapitalization.sentences,
+                              cursorColor: AppTheme.textSecondary,
+                              style: tt.bodyMedium?.copyWith(color: cs.onSurface),
+                              decoration: InputDecoration(
+                                hintText: 'what\'s this for? (chaat, uber…)',
+                                filled: true,
+                                fillColor: cs.surfaceContainerHighest,
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                  borderSide: BorderSide.none,
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                  borderSide: BorderSide.none,
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                  borderSide: BorderSide.none,
                                 ),
                               ),
                             ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    // Card 2 — Days left
-                    Expanded(
-                      child: Container(
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: colorScheme.surfaceContainer,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              budget != null
-                                  ? '${budget.daysRemaining}'
-                                  : '—',
-                              style: textTheme.titleLarge?.copyWith(
-                                color: colorScheme.onSurface,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                            Text(
-                              'days left',
-                              style: textTheme.labelSmall?.copyWith(
-                                color: colorScheme.onSurfaceVariant,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              budget != null
-                                  ? '${budget.dailyLimit.toRupees()}/day'
-                                  : '—',
-                              style: textTheme.labelSmall?.copyWith(
-                                color: colorScheme.primary,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+                          )
+                        : const SizedBox.shrink(),
+                  ),
 
-              // 6. Health score card
-              const SizedBox(height: 8),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: const _HealthScoreCard(),
+                  // Category chip — animated in/out when tag typed
+                  AnimatedSize(
+                    duration: const Duration(milliseconds: 200),
+                    curve: Curves.easeInOut,
+                    child: hasTag
+                        ? Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                GestureDetector(
+                                  onTap: () => setState(
+                                      () => _showPicker = !_showPicker),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 12, vertical: 10),
+                                    decoration: BoxDecoration(
+                                      color: chipBg,
+                                      borderRadius: BorderRadius.circular(16),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        if (_isCategorizing)
+                                          SizedBox(
+                                            width: 16,
+                                            height: 16,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                              color: cs.onSurfaceVariant,
+                                            ),
+                                          )
+                                        else
+                                          Icon(
+                                              displayIcon ??
+                                                  Icons.category_rounded,
+                                              size: 16,
+                                              color: chipOn),
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          _isCategorizing
+                                              ? 'categorizing...'
+                                              : displayCategory ?? '',
+                                          style: tt.labelMedium?.copyWith(
+                                            color: _isCategorizing
+                                                ? cs.onSurfaceVariant
+                                                : chipOn,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                        if (!_isCategorizing &&
+                                            (isOverridden ||
+                                                confidence != null)) ...[
+                                          const SizedBox(width: 8),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 6, vertical: 2),
+                                            decoration: BoxDecoration(
+                                              color: Colors.white
+                                                  .withValues(alpha: 0.18),
+                                              borderRadius:
+                                                  BorderRadius.circular(8),
+                                            ),
+                                            child: Text(
+                                              isOverridden
+                                                  ? 'edited'
+                                                  : '$confidence%',
+                                              style: tt.labelSmall?.copyWith(
+                                                color: chipOn,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                        const Spacer(),
+                                        Text(
+                                          _showPicker ? 'close' : 'change',
+                                          style: tt.labelSmall?.copyWith(
+                                            color:
+                                                chipOn.withValues(alpha: 0.7),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 2),
+                                        Icon(
+                                          _showPicker
+                                              ? Icons.keyboard_arrow_up_rounded
+                                              : Icons
+                                                  .keyboard_arrow_down_rounded,
+                                          size: 16,
+                                          color: chipOn.withValues(alpha: 0.7),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                                AnimatedSize(
+                                  duration: const Duration(milliseconds: 200),
+                                  curve: Curves.easeInOut,
+                                  child: _showPicker
+                                      ? Padding(
+                                          padding:
+                                              const EdgeInsets.only(top: 8),
+                                          child: Wrap(
+                                            spacing: 8,
+                                            runSpacing: 8,
+                                            children:
+                                                _kCategories.map((cat) {
+                                              final isSelected =
+                                                  (_overrideCategory ??
+                                                          _predictedCategory) ==
+                                                      cat.category;
+                                              return GestureDetector(
+                                                onTap: () => setState(() {
+                                                  _overrideCategory =
+                                                      cat.category;
+                                                  _showPicker = false;
+                                                }),
+                                                child: Container(
+                                                  padding: const EdgeInsets
+                                                      .symmetric(
+                                                      horizontal: 12,
+                                                      vertical: 8),
+                                                  decoration: BoxDecoration(
+                                                    color: isSelected
+                                                        ? cs.secondaryContainer
+                                                        : cs
+                                                            .surfaceContainerHigh,
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            12),
+                                                    border: isSelected
+                                                        ? Border.all(
+                                                            color: cs.primary,
+                                                            width: 1)
+                                                        : null,
+                                                  ),
+                                                  child: Row(
+                                                    mainAxisSize:
+                                                        MainAxisSize.min,
+                                                    children: [
+                                                      Icon(cat.icon,
+                                                          size: 14,
+                                                          color: isSelected
+                                                              ? cs
+                                                                  .onSecondaryContainer
+                                                              : cs
+                                                                  .onSurfaceVariant),
+                                                      const SizedBox(width: 6),
+                                                      Text(
+                                                        cat.short,
+                                                        style: tt.labelMedium
+                                                            ?.copyWith(
+                                                          color: isSelected
+                                                              ? cs
+                                                                  .onSecondaryContainer
+                                                              : cs
+                                                                  .onSurfaceVariant,
+                                                          fontWeight: isSelected
+                                                              ? FontWeight.w600
+                                                              : FontWeight.w400,
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                              );
+                                            }).toList(),
+                                          ),
+                                        )
+                                      : const SizedBox.shrink(),
+                                ),
+                              ],
+                            ),
+                          )
+                        : const SizedBox.shrink(),
+                  ),
+
+                  // Drag handle
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    child: Center(
+                      child: Container(
+                        width: 36,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: cs.onSurface.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ),
+                  ),
+                ], // end inner Column children
+              ), // end inner Column
+            ), // end DecoratedBox
+          ), // end Expanded(flex:2) editor zone
+
+            // ── ZONE B: Keyboard (dark background) ─────────────────────────
+            if (!isSystemKeyboardVisible) ...[
+              Expanded(
+                flex: 5,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+                  child: ClutchKeyboard(
+                    onDigit: _appendDigit,
+                    onBackspace: _backspace,
+                    onConfirm: _confirm,
+                    onAskClutch: _askClutch,
+                    isConfirmLoading: _isLogging,
+                  ),
+                ),
               ),
               const SizedBox(height: 16),
-
-              // 7. "today's expenses" section header
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Row(
-                  children: [
-                    Text(
-                      'today',
-                      style: textTheme.titleMedium?.copyWith(
-                        color: colorScheme.onSurface,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const Spacer(),
-                    TextButton(
-                      onPressed: () => ref.read(shellTabIndexProvider.notifier).set(3),
-                      style: TextButton.styleFrom(
-                        padding: EdgeInsets.zero,
-                        minimumSize: Size.zero,
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      ),
-                      child: Text(
-                        'see all',
-                        style: textTheme.labelMedium?.copyWith(
-                          color: colorScheme.primary,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              // 8. Today's expense list
-              if (todayExpenses.isEmpty)
-                Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  child: Text(
-                    'no expenses logged today',
-                    style: textTheme.bodySmall?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                )
-              else
-                ...todayExpenses.take(3).map((e) => _ExpenseItem(
-                      icon: _categoryIcon(e.category),
-                      title: e.tag,
-                      subtitle: e.category.toLowerCase(),
-                      amount: e.amount.toRupees(),
-                      colorScheme: colorScheme,
-                      textTheme: textTheme,
-                    )),
-
-              // Day total row
-              if (todayExpenses.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Row(
-                    children: [
-                      const Spacer(),
-                      Text(
-                        'day total: ${dayTotal.toRupees()}',
-                        style: textTheme.labelMedium?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-              // 9. Bottom spacing for FAB
-              const SizedBox(height: 120),
             ],
-          ),
-        ),
-      ),
-    );
+          ], // end outer Column children
+        ), // end outer Column
+      ), // end SafeArea
+    ); // end Scaffold
   }
 }
 
-// ---------------------------------------------------------------------------
-// _PendingSavingsBanner
-// ---------------------------------------------------------------------------
+// ── Blinking cursor ───────────────────────────────────────────────────────────
 
-class _PendingSavingsBanner extends ConsumerWidget {
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final cs = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
-    final summaryAsync = ref.watch(dailySummaryNotifierProvider);
-
-    return summaryAsync.maybeWhen(
-      data: (summary) {
-        // Only show banner if there are pending savings but closeout already
-        // happened today (or needsCloseout is false) — avoids double-showing
-        // alongside the auto-triggered sheet.
-        if (summary.pendingSavings <= 0 || summary.needsCloseout) {
-          return const SizedBox(height: 8);
-        }
-        return GestureDetector(
-          onTap: () => showModalBottomSheet(
-            context: context,
-            isScrollControlled: true,
-            backgroundColor: Colors.transparent,
-            barrierColor: cs.scrim.withValues(alpha: 0.32),
-            builder: (_) => DailyCloseoutSheet(summary: summary),
-          ),
-          child: Container(
-            margin: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              color: cs.primaryContainer,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.savings_rounded, color: cs.onPrimaryContainer, size: 18),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    '${summary.pendingSavings.toRupees()} saved up — allocate to goals',
-                    style: tt.labelMedium?.copyWith(color: cs.onPrimaryContainer),
-                  ),
-                ),
-                Icon(Icons.chevron_right_rounded, color: cs.onPrimaryContainer, size: 18),
-              ],
-            ),
-          ),
-        );
-      },
-      orElse: () => const SizedBox(height: 8),
-    );
-  }
-}
-
-class _HealthScoreCard extends ConsumerWidget {
-  const _HealthScoreCard();
-
-  Color _scoreColor(int score, ColorScheme cs) {
-    if (score >= 80) return cs.primary;
-    if (score >= 60) return cs.tertiary;
-    return cs.error;
-  }
-
-  Color _statusBg(String status, ColorScheme cs) {
-    switch (status) {
-      case 'doing well': return cs.primaryContainer;
-      case 'watch out': return cs.tertiaryContainer;
-      default: return cs.errorContainer;
-    }
-  }
-
-  Color _statusOn(String status, ColorScheme cs) {
-    switch (status) {
-      case 'doing well': return cs.onPrimaryContainer;
-      case 'watch out': return cs.onTertiaryContainer;
-      default: return cs.onErrorContainer;
-    }
-  }
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final cs = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
-    final healthAsync = ref.watch(healthNotifierProvider);
-    healthAsync.whenOrNull(error: (e, _) => debugPrint('[health] error: $e'));
-    final health = healthAsync.valueOrNull;
-
-    final score = health?.score ?? 0;
-    final status = health?.status ?? '';
-    final progressColor = _scoreColor(score, cs);
-
-    return GestureDetector(
-      onTap: () => context.push(AppConstants.routeHealthScore),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: cs.surfaceContainerHigh,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: health == null
-            ? SizedBox(
-                height: 72,
-                child: Center(
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2, color: cs.primary),
-                ),
-              )
-            : Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Text('health score',
-                          style: tt.labelMedium
-                              ?.copyWith(color: cs.onSurfaceVariant)),
-                      const Spacer(),
-                      Text('$score',
-                          style: tt.titleLarge?.copyWith(
-                              color: cs.onSurface,
-                              fontWeight: FontWeight.w700)),
-                      Text(' / 100',
-                          style: tt.labelSmall
-                              ?.copyWith(color: cs.onSurfaceVariant)),
-                      const SizedBox(width: 4),
-                      Icon(Icons.chevron_right_rounded,
-                          size: 18, color: cs.onSurfaceVariant),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  LinearProgressIndicator(
-                    value: score / 100,
-                    backgroundColor: cs.surfaceContainerHighest,
-                    valueColor:
-                        AlwaysStoppedAnimation<Color>(progressColor),
-                    minHeight: 6,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: _statusBg(status, cs),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Text(status,
-                            style: tt.labelSmall?.copyWith(
-                                color: _statusOn(status, cs),
-                                fontWeight: FontWeight.w600)),
-                      ),
-                      const Spacer(),
-                      ...health.factors.map((f) => Padding(
-                            padding: const EdgeInsets.only(left: 12),
-                            child: _FactorDot(
-                              label: f.title,
-                              color: _scoreColor(f.score, cs),
-                            ),
-                          )),
-                    ],
-                  ),
-                ],
-              ),
-      ),
-    );
-  }
-}
-
-class _FactorDot extends StatelessWidget {
-  const _FactorDot({required this.label, required this.color});
-
-  final String label;
+class _BlinkingCursor extends StatefulWidget {
+  const _BlinkingCursor({required this.color});
   final Color color;
 
   @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: 6,
-          height: 6,
-          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-        ),
-        const SizedBox(width: 4),
-        Text(
-          label,
-          style: tt.labelSmall?.copyWith(color: cs.onSurfaceVariant),
-        ),
-      ],
-    );
-  }
+  State<_BlinkingCursor> createState() => _BlinkingCursorState();
 }
 
-class _ExpenseItem extends StatelessWidget {
-  const _ExpenseItem({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.amount,
-    required this.colorScheme,
-    required this.textTheme,
-  });
+class _BlinkingCursorState extends State<_BlinkingCursor>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _ctrl;
 
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final String amount;
-  final ColorScheme colorScheme;
-  final TextTheme textTheme;
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 530),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: ListTile(
-        leading: Container(
-          width: 40,
-          height: 40,
-          decoration: BoxDecoration(
-            color: colorScheme.secondaryContainer,
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Icon(
-            icon,
-            color: colorScheme.onSecondaryContainer,
-            size: 20,
-          ),
-        ),
-        title: Text(
-          title,
-          style: textTheme.bodyMedium?.copyWith(color: colorScheme.onSurface),
-        ),
-        subtitle: Text(
-          subtitle,
-          style: textTheme.bodySmall?.copyWith(color: colorScheme.onSurfaceVariant),
-        ),
-        trailing: Text(
-          amount,
-          style: textTheme.titleMedium?.copyWith(
-            color: colorScheme.onSurface,
-            fontWeight: FontWeight.w600,
-          ),
+    return FadeTransition(
+      opacity: _ctrl,
+      child: Container(
+        width: 3,
+        height: 52,
+        decoration: BoxDecoration(
+          color: widget.color,
+          borderRadius: BorderRadius.circular(2),
         ),
       ),
     );

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 class AppTheme {
   // Color constants — Material Theme Builder dark scheme
@@ -13,6 +14,17 @@ class AppTheme {
   static const Color success       = Color(0xFF88D6BB); // reuse primary
   static const Color warning       = Color(0xFFFFB800);
   static const Color divider       = Color(0xFF252B29); // surfaceContainerHigh
+
+  // Semantic budget-state colors (domain-specific, outside M3 scheme)
+  static const Color budgetGood    = Color(0xFF40AC02); // healthy
+  static const Color budgetWarning = Color(0xFFE8A020); // caution (amber adjusted for dark)
+  static const Color budgetBad     = Color(0xFFC70909); // overspent
+
+  static Color budgetStateColor(double spentFraction) {
+    if (spentFraction < 0.7) return budgetGood;
+    if (spentFraction < 0.9) return budgetWarning;
+    return budgetBad;
+  }
 
   // Material Theme Builder — dark scheme
   static const ColorScheme _colorScheme = ColorScheme(
@@ -46,54 +58,74 @@ class AppTheme {
     inversePrimary:       Color(0xFF146B55),
   );
 
+  // Manrope text theme — bold, confident voice for all type scales
+  static TextTheme get _textTheme => TextTheme(
+    displayLarge:  GoogleFonts.manrope(fontSize: 57, fontWeight: FontWeight.w700, color: textPrimary),
+    displayMedium: GoogleFonts.manrope(fontSize: 45, fontWeight: FontWeight.w700, color: textPrimary),
+    displaySmall:  GoogleFonts.manrope(fontSize: 36, fontWeight: FontWeight.w600, color: textPrimary),
+    headlineLarge: GoogleFonts.manrope(fontSize: 32, fontWeight: FontWeight.w600, color: textPrimary),
+    headlineMedium:GoogleFonts.manrope(fontSize: 28, fontWeight: FontWeight.w600, color: textPrimary),
+    headlineSmall: GoogleFonts.manrope(fontSize: 24, fontWeight: FontWeight.w600, color: textPrimary),
+    titleLarge:    GoogleFonts.manrope(fontSize: 22, fontWeight: FontWeight.w600, color: textPrimary),
+    titleMedium:   GoogleFonts.manrope(fontSize: 16, fontWeight: FontWeight.w600, color: textPrimary),
+    titleSmall:    GoogleFonts.manrope(fontSize: 14, fontWeight: FontWeight.w500, color: textPrimary),
+    bodyLarge:     GoogleFonts.manrope(fontSize: 16, fontWeight: FontWeight.w500, color: textPrimary),
+    bodyMedium:    GoogleFonts.manrope(fontSize: 14, fontWeight: FontWeight.w400, color: textPrimary),
+    bodySmall:     GoogleFonts.manrope(fontSize: 12, fontWeight: FontWeight.w400, color: textSecondary),
+    labelLarge:    GoogleFonts.manrope(fontSize: 14, fontWeight: FontWeight.w500, color: textPrimary),
+    labelMedium:   GoogleFonts.manrope(fontSize: 12, fontWeight: FontWeight.w500, color: textSecondary),
+    labelSmall:    GoogleFonts.manrope(fontSize: 11, fontWeight: FontWeight.w400, color: textSecondary),
+  );
+
   static ThemeData get dark => ThemeData(
         useMaterial3:            true,
         colorScheme:             _colorScheme,
         scaffoldBackgroundColor: background,
+        textTheme:               _textTheme,
 
         // AppBar
-        appBarTheme: const AppBarTheme(
+        appBarTheme: AppBarTheme(
           backgroundColor:        background,
           foregroundColor:        textPrimary,
           elevation:              0,
           scrolledUnderElevation: 2,
           centerTitle:            true,
-          titleTextStyle: TextStyle(
+          titleTextStyle: GoogleFonts.manrope(
             fontSize: 22,
-            fontWeight: FontWeight.w500,
+            fontWeight: FontWeight.w600,
             letterSpacing: 0,
             color: textPrimary,
           ),
         ),
 
-        // Cards — M3 medium shape token = 12px
+        // Cards — large shape token = 16px
         cardTheme: const CardThemeData(
           color:     card,
           elevation: 0,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.all(Radius.circular(12)),
+            borderRadius: BorderRadius.all(Radius.circular(16)),
           ),
           margin: EdgeInsets.zero,
         ),
 
-        // Input fields — M3 medium shape token = 12px (flat/borderless style)
+        // Input fields — large shape token = 16px (flat/borderless style)
         inputDecorationTheme: const InputDecorationTheme(
           filled:    true,
           fillColor: surface,
           border: OutlineInputBorder(
-            borderRadius: BorderRadius.all(Radius.circular(12)),
+            borderRadius: BorderRadius.all(Radius.circular(16)),
             borderSide:   BorderSide.none,
           ),
           enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.all(Radius.circular(12)),
+            borderRadius: BorderRadius.all(Radius.circular(16)),
             borderSide:   BorderSide.none,
           ),
           focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.all(Radius.circular(12)),
+            borderRadius: BorderRadius.all(Radius.circular(16)),
             borderSide:   BorderSide.none,
           ),
           errorBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.all(Radius.circular(12)),
+            borderRadius: BorderRadius.all(Radius.circular(16)),
             borderSide:   BorderSide(color: error, width: 1),
           ),
           hintStyle:      TextStyle(color: textSecondary, fontSize: 14),
@@ -136,7 +168,9 @@ class AppTheme {
         // Bottom navigation
         navigationBarTheme: NavigationBarThemeData(
           backgroundColor: surface,
-          indicatorColor:  card,
+          // Explicit primaryContainer pill — no more muddy rectangle
+          indicatorColor: const Color(0xFF00513F), // primaryContainer
+          indicatorShape: const StadiumBorder(),
           iconTheme: WidgetStateProperty.resolveWith((states) {
             if (states.contains(WidgetState.selected)) {
               return const IconThemeData(color: accent);
@@ -154,7 +188,7 @@ class AppTheme {
             );
           }),
           elevation:   2,
-          shadowColor: const Color(0xFF000000), // colorScheme.shadow
+          shadowColor: const Color(0xFF000000),
           height:      64,
         ),
 
@@ -174,13 +208,13 @@ class AppTheme {
           space:     0,
         ),
 
-        // Chip — M3 small shape token = 8px
+        // Chip — 12px
         chipTheme: const ChipThemeData(
           backgroundColor: card,
           labelStyle: TextStyle(fontSize: 12, color: textPrimary),
           side:  BorderSide.none,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.all(Radius.circular(8)),
+            borderRadius: BorderRadius.all(Radius.circular(12)),
           ),
         ),
 
@@ -194,12 +228,12 @@ class AppTheme {
           ),
         ),
 
-        // Snackbar — M3 extra-small shape token = 4px
+        // Snackbar — 12px floating
         snackBarTheme: const SnackBarThemeData(
           backgroundColor: card,
           contentTextStyle: TextStyle(fontSize: 13, color: textPrimary),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.all(Radius.circular(4)),
+            borderRadius: BorderRadius.all(Radius.circular(12)),
           ),
           behavior: SnackBarBehavior.floating,
         ),

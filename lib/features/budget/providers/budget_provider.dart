@@ -36,7 +36,9 @@ class BudgetState {
   final double remainingBudget;
   final double dailyRemaining;
 
-  bool get isOnTrack => remainingBudget >= (daysRemaining * dailyLimit);
+  // Uses original daily pace (amount / totalDays), not the rolling dailyLimit
+  // (which equals remaining/daysLeft — making the comparison trivially true).
+  bool get isOnTrack => totalDays > 0 && remainingBudget >= (daysRemaining * (amount / totalDays));
   double get spentFraction => (totalSpent / amount).clamp(0.0, 1.0);
 
   factory BudgetState.fromJson(Map<String, dynamic> json) {

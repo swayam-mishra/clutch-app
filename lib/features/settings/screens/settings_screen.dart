@@ -5,7 +5,6 @@ import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../auth/providers/auth_provider.dart';
-import '../../budget/providers/budget_provider.dart';
 import '../providers/settings_provider.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
@@ -88,7 +87,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final tt = Theme.of(context).textTheme;
 
     final settingsAsync = ref.watch(settingsNotifierProvider);
-    final budget = ref.watch(budgetNotifierProvider).valueOrNull;
 
     // Populate controllers once when data first loads
     if (!_initialized) {
@@ -187,23 +185,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ),
 
             const SizedBox(height: 28),
-            Divider(color: cs.outlineVariant),
-            const SizedBox(height: 20),
-
-            // ── Budget ─────────────────────────────────────────────────────
-            _SectionHeader('budget'),
-            _SettingsTile(
-              icon: Icons.account_balance_wallet_rounded,
-              title: 'monthly limit',
-              subtitle: budget != null
-                  ? '₹${budget.amount.toInt()} · resets 1st of month'
-                  : 'tap to configure',
-              trailing: Icon(Icons.chevron_right_rounded,
-                  color: cs.onSurfaceVariant, size: 20),
-              onTap: () => context.push(AppConstants.routeBudgetSetup),
-            ),
-
-            const SizedBox(height: 24),
             Divider(color: cs.outlineVariant),
             const SizedBox(height: 20),
 
@@ -496,7 +477,6 @@ class _SettingsTile extends StatelessWidget {
   const _SettingsTile({
     required this.icon,
     required this.title,
-    this.subtitle,
     this.trailing,
     this.onTap,
     this.iconColor,
@@ -505,7 +485,6 @@ class _SettingsTile extends StatelessWidget {
 
   final IconData icon;
   final String title;
-  final String? subtitle;
   final Widget? trailing;
   final VoidCallback? onTap;
   final Color? iconColor;
@@ -520,11 +499,11 @@ class _SettingsTile extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 4),
       decoration: BoxDecoration(
         color: cs.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
       ),
       child: ListTile(
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(16),
         ),
         leading: Container(
           width: 36,
@@ -543,12 +522,6 @@ class _SettingsTile extends StatelessWidget {
             fontWeight: FontWeight.w500,
           ),
         ),
-        subtitle: subtitle != null
-            ? Text(
-                subtitle!,
-                style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
-              )
-            : null,
         trailing: trailing,
         onTap: onTap,
       ),
@@ -580,11 +553,11 @@ class _ToggleTile extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 4),
       decoration: BoxDecoration(
         color: cs.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
       ),
       child: ListTile(
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(16),
         ),
         leading: Container(
           width: 36,

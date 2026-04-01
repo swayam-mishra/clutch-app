@@ -1,46 +1,33 @@
-import 'dart:io';
 import 'dart:math' show max;
 
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:share_plus/share_plus.dart';
 
+import 'package:go_router/go_router.dart';
+
+import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../shared/extensions/currency_extension.dart';
+import '../../../shared/utils/csv_export.dart';
 import '../../expenses/providers/expense_provider.dart';
+import '../../health/providers/health_provider.dart';
 import '../providers/analytics_provider.dart';
-
-Future<void> _exportCsv(List<Expense> expenses) async {
-  final buffer = StringBuffer();
-  buffer.writeln('date,time,tag,category,amount');
-  for (final e in expenses) {
-    buffer.writeln(
-        '${e.date},${e.time},${e.tag},${e.category},${e.amount.toStringAsFixed(2)}');
-  }
-
-  final dir = await getTemporaryDirectory();
-  final shareDir = Directory('${dir.path}/share_plus');
-  if (!await shareDir.exists()) await shareDir.create();
-  final file = File('${shareDir.path}/clutch_expenses.csv');
-  await file.writeAsString(buffer.toString());
-
-  await Share.shareXFiles(
-    [XFile(file.path, mimeType: 'text/csv')],
-    subject: 'Clutch Expenses',
-  );
-}
 
 class AnalyticsScreen extends ConsumerWidget {
   const AnalyticsScreen({super.key});
 
-  Color _heatColor(double spend, ColorScheme cs) {
+  // Buckwheat-style ratio: spend relative to daily budget, not hardcoded thresholds.
+  // ratio < 0.5  → light (under half the daily limit)
+  // ratio < 1.0  → medium (approaching the limit)
+  // ratio >= 1.0 → over daily budget → error tint
+  Color _heatColor(double spend, double dailyLimit, ColorScheme cs) {
     if (spend == 0) return cs.surfaceContainer;
-    if (spend < 100) return cs.primaryContainer;
-    if (spend < 200) return cs.primary.withValues(alpha: 0.6);
-    return cs.primary;
+    final ratio = spend / dailyLimit.clamp(0.1, double.infinity);
+    if (ratio < 0.5) return cs.primaryContainer;
+    if (ratio < 1.0) return cs.primary.withValues(alpha: 0.7);
+    return cs.errorContainer;
   }
 
   @override
@@ -49,6 +36,7 @@ class AnalyticsScreen extends ConsumerWidget {
     final tt = Theme.of(context).textTheme;
     final expenses = ref.watch(expenseNotifierProvider).valueOrNull ?? [];
     final analyticsAsync = ref.watch(analyticsNotifierProvider);
+    final health = ref.watch(healthNotifierProvider).valueOrNull;
 
     return analyticsAsync.when(
       loading: () => Scaffold(
@@ -57,15 +45,18 @@ class AnalyticsScreen extends ConsumerWidget {
           child: CircularProgressIndicator(color: cs.primary),
         ),
       ),
-      error: (_, err) => Scaffold(
-        backgroundColor: AppTheme.background,
-        body: Center(
-          child: Text(
-            'failed to load analytics',
-            style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
+      error: (err, stack) {
+        debugPrint('Analytics error: $err\n$stack');
+        return Scaffold(
+          backgroundColor: AppTheme.background,
+          body: Center(
+            child: Text(
+              'failed to load analytics',
+              style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
+            ),
           ),
-        ),
-      ),
+        );
+      },
       data: (a) {
         // Derived display values
         final startDt = DateTime.parse(a.startDate);
@@ -120,13 +111,263 @@ class AnalyticsScreen extends ConsumerWidget {
                       IconButton(
                         icon: const Icon(Icons.ios_share_rounded),
                         color: cs.onSurfaceVariant,
-                        onPressed: () => _exportCsv(expenses),
+                        onPressed: () => exportExpensesCsv(expenses),
                         padding: EdgeInsets.zero,
                         constraints: const BoxConstraints(),
                       ),
                     ],
                   ),
                   const SizedBox(height: 16),
+
+                  // ── Monthly budget overview (migrated from HomeScreen) ──
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: cs.surfaceContainerHigh,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Text(
+                              'monthly budget',
+                              style: tt.bodySmall?.copyWith(
+                                color: cs.onSurfaceVariant,
+                              ),
+                            ),
+                            const Spacer(),
+                            Text(
+                              DateFormat('MMMM yyyy')
+                                  .format(DateTime.parse(a.startDate))
+                                  .toLowerCase(),
+                              style: tt.labelSmall?.copyWith(
+                                color: cs.onSurfaceVariant,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          a.budget.toRupees(),
+                          style: tt.displaySmall?.copyWith(
+                            color: cs.onSurface,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '${a.totalSpent.toRupees()} spent · ${(a.percentUsed * 100).toInt()}% used',
+                          style: tt.bodySmall?.copyWith(
+                            color: cs.onSurfaceVariant,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        LinearProgressIndicator(
+                          value: a.percentUsed.clamp(0.0, 1.0),
+                          backgroundColor: cs.surfaceContainerHighest,
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            AppTheme.budgetStateColor(a.percentUsed),
+                          ),
+                          borderRadius: BorderRadius.circular(8),
+                          minHeight: 4,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+
+                  // ── Stats row (migrated from HomeScreen) ──────────────────
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: cs.surfaceContainer,
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                (a.budget - a.totalSpent).toRupees(),
+                                style: tt.titleLarge?.copyWith(
+                                  color: cs.onSurface,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              Text(
+                                'remaining',
+                                style: tt.labelSmall?.copyWith(
+                                  color: cs.onSurfaceVariant,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Builder(builder: (context) {
+                                final remaining = a.budget - a.totalSpent;
+                                final dailyLimit = a.totalDays > 0
+                                    ? a.budget / a.totalDays
+                                    : 0.0;
+                                final isOnTrack =
+                                    remaining >= (a.daysLeft * dailyLimit);
+                                return Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 8, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: isOnTrack
+                                        ? cs.primaryContainer
+                                        : cs.errorContainer,
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Text(
+                                    isOnTrack ? 'on track' : 'over budget',
+                                    style: tt.labelSmall?.copyWith(
+                                      color: isOnTrack
+                                          ? cs.onPrimaryContainer
+                                          : cs.onErrorContainer,
+                                    ),
+                                  ),
+                                );
+                              }),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: cs.surfaceContainer,
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                '${a.daysLeft}',
+                                style: tt.titleLarge?.copyWith(
+                                  color: cs.onSurface,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              Text(
+                                'days left',
+                                style: tt.labelSmall?.copyWith(
+                                  color: cs.onSurfaceVariant,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                a.totalDays > 0
+                                    ? '${(a.budget / a.totalDays).toRupees()}/day'
+                                    : '—',
+                                style: tt.labelSmall?.copyWith(
+                                  color: cs.primary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+
+                  // ── Health score mini-card ─────────────────────────────────
+                  if (health != null)
+                    GestureDetector(
+                      onTap: () => context.push(AppConstants.routeHealthScore),
+                      child: Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: cs.surfaceContainerHigh,
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Row(
+                          children: [
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'health score',
+                                  style: tt.labelMedium?.copyWith(
+                                    color: cs.onSurfaceVariant,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Row(
+                                  crossAxisAlignment: CrossAxisAlignment.baseline,
+                                  textBaseline: TextBaseline.alphabetic,
+                                  children: [
+                                    Text(
+                                      '${health.score}',
+                                      style: tt.headlineMedium?.copyWith(
+                                        color: cs.onSurface,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                    Text(
+                                      ' / 100',
+                                      style: tt.labelSmall?.copyWith(
+                                        color: cs.onSurfaceVariant,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: LinearProgressIndicator(
+                                value: health.score / 100,
+                                backgroundColor: cs.surfaceContainerHighest,
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  health.score >= 80
+                                      ? cs.primary
+                                      : health.score >= 60
+                                          ? cs.tertiary
+                                          : cs.error,
+                                ),
+                                minHeight: 6,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: health.status == 'doing well'
+                                    ? cs.primaryContainer
+                                    : health.status == 'watch out'
+                                        ? cs.tertiaryContainer
+                                        : cs.errorContainer,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                health.status,
+                                style: tt.labelSmall?.copyWith(
+                                  color: health.status == 'doing well'
+                                      ? cs.onPrimaryContainer
+                                      : health.status == 'watch out'
+                                          ? cs.onTertiaryContainer
+                                          : cs.onErrorContainer,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            Icon(Icons.chevron_right_rounded,
+                                size: 18, color: cs.onSurfaceVariant),
+                          ],
+                        ),
+                      ),
+                    ),
+                  const SizedBox(height: 8),
 
                   // CARD 1 — Hero budget card
                   Container(
@@ -251,7 +492,7 @@ class AnalyticsScreen extends ConsumerWidget {
                                 ),
                                 const SizedBox(height: 8),
                                 Text(
-                                  '${a.percentUsed.toStringAsFixed(1)}% of budget',
+                                  '${(a.percentUsed * 100).toStringAsFixed(1)}% of budget',
                                   style: tt.labelSmall?.copyWith(
                                     color: cs.onPrimaryContainer
                                         .withValues(alpha: 0.7),
@@ -765,7 +1006,18 @@ class AnalyticsScreen extends ConsumerWidget {
                               final day = i + 1;
                               final spend =
                                   a.calendarData['$day'] ?? 0.0;
-                              final bgColor = _heatColor(spend, cs);
+                              final ratio = (spend > 0 && dailyLimit > 0)
+                                  ? spend / dailyLimit
+                                  : 0.0;
+                              final bgColor =
+                                  _heatColor(spend, dailyLimit, cs);
+                              final textColor = spend == 0
+                                  ? cs.onSurfaceVariant
+                                  : ratio < 0.5
+                                      ? cs.onPrimaryContainer
+                                      : ratio < 1.0
+                                          ? cs.onPrimary
+                                          : cs.onErrorContainer;
                               return Container(
                                 decoration: BoxDecoration(
                                   color: bgColor,
@@ -776,9 +1028,7 @@ class AnalyticsScreen extends ConsumerWidget {
                                   child: Text(
                                     '$day',
                                     style: tt.labelSmall?.copyWith(
-                                      color: spend > 0
-                                          ? cs.onPrimary
-                                          : cs.onSurfaceVariant,
+                                      color: textColor,
                                       fontSize: 10,
                                     ),
                                   ),

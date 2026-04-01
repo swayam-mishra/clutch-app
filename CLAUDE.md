@@ -92,10 +92,15 @@ dart run build_runner build --delete-conflicting-outputs
 | `AppTheme.textSecondary` | `#BFC9C3` | onSurfaceVariant |
 | `AppTheme.divider` | `#3F4945` | outlineVariant |
 | `AppTheme.error` | `#FFB4AB` | error |
+| `AppTheme.budgetGood` | `#40AC02` | budget healthy (domain semantic) |
+| `AppTheme.budgetWarning` | `#E8A020` | budget caution (domain semantic) |
+| `AppTheme.budgetBad` | `#C70909` | budget overspent (domain semantic) |
+
+**Budget state helper:** `AppTheme.budgetStateColor(spentFraction)` returns the correct semantic color. Use instead of ad-hoc color comparisons for budget health.
 
 ### Typography
 
-Typeface: default M3 (Roboto on Android). No custom font — Flutter M3 handles the full type scale automatically. Never import `google_fonts` in theme files.
+Typeface: **Manrope** (variable font via `google_fonts` package). `AppTheme._textTheme` defines all 15 M3 scale entries with Manrope at targeted weights (w700 for display, w600 for headlines/titles, w500/w400 for body/labels). `google_fonts` is intentionally imported in `app_theme.dart` — this is the one allowed exception.
 
 Always use `Theme.of(context).textTheme.*` in screens. Never hardcode font sizes.
 
@@ -189,6 +194,9 @@ lib/
       clutch_button.dart        ← primary CTA button
       clutch_card.dart          ← base card container
       loading_indicator.dart    ← centered CircularProgressIndicator
+      animated_number.dart      ← character-level slide animation for numeric values
+      budget_pill.dart          ← status-aware pill (good/warning/bad), reads budgetNotifierProvider
+      clutch_keyboard.dart      ← animated numpad (pill→rect on press), 3 key types
     extensions/
       currency_extension.dart   ← num.toRupees() → ₹1,234
   main.dart                     ← ProviderScope + MaterialApp.router
@@ -224,10 +232,20 @@ lib/
 | `AppConstants.routeSignup` | `/signup` |
 | `AppConstants.routeHome` | `/home` |
 | `AppConstants.routeBudgetSetup` | `/budget-setup` |
-| `AppConstants.routeAnalytics` | `/analytics` |
-| `AppConstants.routeGoals` | `/goals` |
 | `AppConstants.routePurchaseAdvisor` | `/purchase-advisor` |
 | `AppConstants.routeChat` | `/chat` |
+| `AppConstants.routeSettings` | `/settings` |
+| `AppConstants.routeHealthScore` | `/health-score` |
+
+**Shell tab structure (4 tabs):**
+| Index | Label | Screen |
+|---|---|---|
+| 0 | home | `HomeScreen` — editor-first, always-visible keyboard |
+| 1 | analytics | `AnalyticsScreen` |
+| 2 | expenses | `ExpensesScreen` |
+| 3 | goals | `GoalsScreen` |
+
+Settings is **not a tab** — accessed via the ⚙️ icon in HomeScreen header → `context.push(AppConstants.routeSettings)`. Health score is a push route from the analytics screen health mini-card.
 
 ---
 

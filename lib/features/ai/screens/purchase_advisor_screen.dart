@@ -72,7 +72,14 @@ class _AdvisorResult {
 // ---------------------------------------------------------------------------
 
 class PurchaseAdvisorScreen extends ConsumerStatefulWidget {
-  const PurchaseAdvisorScreen({super.key});
+  const PurchaseAdvisorScreen({
+    super.key,
+    this.initialAmount,
+    this.initialItem,
+  });
+
+  final String? initialAmount;
+  final String? initialItem;
 
   @override
   ConsumerState<PurchaseAdvisorScreen> createState() =>
@@ -85,6 +92,19 @@ class _PurchaseAdvisorScreenState
   final _priceController = TextEditingController();
   bool _isLoading = false;
   _AdvisorResult? _result;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.initialItem != null) _itemController.text = widget.initialItem!;
+    if (widget.initialAmount != null) _priceController.text = widget.initialAmount!;
+    // Auto-submit when both values come from the keyboard
+    if (widget.initialItem != null && widget.initialAmount != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _submit();
+      });
+    }
+  }
 
   @override
   void dispose() {
@@ -168,33 +188,25 @@ class _PurchaseAdvisorScreenState
 
               // Header
               Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  IconButton(
+                    onPressed: () => context.pop(),
+                    icon: const Icon(Icons.arrow_back_rounded),
+                    visualDensity: VisualDensity.compact,
+                    style: IconButton.styleFrom(foregroundColor: cs.onSurfaceVariant),
+                  ),
+                  const SizedBox(width: 4),
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text('ask clutch',
-                          style: tt.headlineSmall?.copyWith(
+                          style: tt.titleLarge?.copyWith(
                               color: cs.onSurface,
                               fontWeight: FontWeight.w600)),
                       Text('should you buy it?',
                           style: tt.bodySmall
                               ?.copyWith(color: cs.onSurfaceVariant)),
                     ],
-                  ),
-                  const Spacer(),
-                  GestureDetector(
-                    onTap: () => context.push('/chat'),
-                    child: Container(
-                      width: 44,
-                      height: 44,
-                      decoration: BoxDecoration(
-                        color: cs.secondaryContainer,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Icon(Icons.chat_bubble_outline_rounded,
-                          size: 20, color: cs.onSecondaryContainer),
-                    ),
                   ),
                 ],
               ),
