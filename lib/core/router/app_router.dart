@@ -2,7 +2,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
-import '../../features/ai/screens/chat_screen.dart';
 import '../../features/ai/screens/purchase_advisor_screen.dart';
 import '../../features/auth/screens/login_screen.dart';
 import '../../features/auth/screens/signup_screen.dart';
@@ -44,11 +43,10 @@ GoRouter appRouter(AppRouterRef ref) {
       ),
       GoRoute(
         path: AppConstants.routePurchaseAdvisor,
-        builder: (context, state) => const PurchaseAdvisorScreen(),
-      ),
-      GoRoute(
-        path: AppConstants.routeChat,
-        builder: (context, state) => const ChatScreen(),
+        builder: (context, state) => PurchaseAdvisorScreen(
+          initialAmount: state.uri.queryParameters['amount'],
+          initialItem: state.uri.queryParameters['item'],
+        ),
       ),
       GoRoute(
         path: AppConstants.routeSettings,

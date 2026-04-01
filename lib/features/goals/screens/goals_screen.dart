@@ -339,7 +339,7 @@ class _LargeGoalCard extends StatelessWidget {
                 height: 48,
                 decoration: BoxDecoration(
                   color: iconBgColor,
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(16),
                 ),
                 child: Icon(_iconData(goal.icon),
                     color: iconColor, size: 24),
@@ -397,7 +397,7 @@ class _LargeGoalCard extends StatelessWidget {
             backgroundColor: progressBg,
             valueColor: AlwaysStoppedAnimation<Color>(progressColor),
             minHeight: 6,
-            borderRadius: BorderRadius.circular(4),
+            borderRadius: BorderRadius.circular(8),
           ),
           const SizedBox(height: 8),
           Row(
@@ -483,7 +483,7 @@ class _SmallGoalCard extends StatelessWidget {
             backgroundColor: cs.surfaceContainerHighest,
             valueColor: AlwaysStoppedAnimation<Color>(cs.primary),
             minHeight: 4,
-            borderRadius: BorderRadius.circular(4),
+            borderRadius: BorderRadius.circular(8),
           ),
           const SizedBox(height: 8),
           Row(
@@ -647,7 +647,7 @@ class _AddGoalSheetState extends ConsumerState<_AddGoalSheet> {
                   const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
               decoration: BoxDecoration(
                 color: AppTheme.surface,
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(16),
               ),
               child: Text(
                 _targetDate == null
@@ -683,7 +683,7 @@ class _AddGoalSheetState extends ConsumerState<_AddGoalSheet> {
                     color: selected
                         ? cs.primaryContainer
                         : cs.surfaceContainerHigh,
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(16),
                   ),
                   child: Icon(
                     iconData,

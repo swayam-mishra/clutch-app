@@ -113,7 +113,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                   Container(
                     decoration: BoxDecoration(
                       color: cs.surfaceContainerHigh,
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(16),
                     ),
                     padding: const EdgeInsets.all(4),
                     child: TextField(
@@ -261,7 +261,7 @@ class _ExpensesScreenState extends ConsumerState<ExpensesScreen> {
                           ),
                           decoration: BoxDecoration(
                             color: cs.surfaceContainerHigh,
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: BorderRadius.circular(16),
                           ),
                           child: ListTile(
                             contentPadding: const EdgeInsets.symmetric(

@@ -76,7 +76,7 @@ class AnalyticsState {
       totalDays: (json['totalDays'] as num).toInt(),
       startDate: json['startDate'] as String,
       endDate: json['endDate'] as String,
-      percentUsed: (json['percentUsed'] as num).toDouble(),
+      percentUsed: (json['percentUsed'] as num).toDouble() / 100,
       minSpend: json['minSpend'] != null
           ? SpendRecord.fromJson(json['minSpend'] as Map<String, dynamic>)
           : null,

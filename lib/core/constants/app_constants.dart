@@ -5,7 +5,7 @@ abstract final class AppConstants {
   // For USB debugging on a physical device, change this to your machine's
   // local IP address (e.g. 'http://192.168.1.X:3001/api').
   // ---------------------------------------------------------------------------
-  static const String apiBaseUrl = 'http://10.0.160.199:3001/api';
+  static const String apiBaseUrl = 'http://10.6.48.170:3001/api';
 
   // Secure storage keys
   static const String accessTokenKey = 'access_token';
