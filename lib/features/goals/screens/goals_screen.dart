@@ -350,6 +350,8 @@ class _LargeGoalCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(goal.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: tt.titleMedium?.copyWith(
                             color: textColor,
                             fontWeight: FontWeight.w600)),
@@ -405,8 +407,12 @@ class _LargeGoalCard extends StatelessWidget {
               Icon(Icons.auto_awesome_rounded,
                   size: 12, color: subtleColor),
               const SizedBox(width: 4),
-              Text('on track for ${goal.estimatedCompletion}',
-                  style: tt.labelSmall?.copyWith(color: subtleColor)),
+              Expanded(
+                child: Text('on track for ${goal.estimatedCompletion}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: tt.labelSmall?.copyWith(color: subtleColor)),
+              ),
             ],
           ),
         ],
@@ -471,6 +477,8 @@ class _SmallGoalCard extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           Text(goal.name,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
               style: tt.titleSmall?.copyWith(
                   color: cs.onSurface, fontWeight: FontWeight.w600)),
           const SizedBox(height: 2),
@@ -595,7 +603,8 @@ class _AddGoalSheetState extends ConsumerState<_AddGoalSheet> {
         top: 24,
         bottom: MediaQuery.of(context).viewInsets.bottom + 24,
       ),
-      child: Column(
+      child: SingleChildScrollView(
+        child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -722,6 +731,7 @@ class _AddGoalSheetState extends ConsumerState<_AddGoalSheet> {
                 : const Text('save goal'),
           ),
         ],
+        ),
       ),
     );
   }

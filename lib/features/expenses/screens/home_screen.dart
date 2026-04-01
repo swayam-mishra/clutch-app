@@ -233,6 +233,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             // ── ZONE A: Editor (~45% of screen height) ──────────────────────
             Expanded(
               flex: 4,
+              child: ClipRect(
               child: DecoratedBox(
                 decoration: BoxDecoration(
                   color: AppTheme.surface,
@@ -264,7 +265,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     ),
 
                     // Amount display + blinking cursor — right-aligned
-                    Expanded(
+                    Flexible(
                       child: Padding(
                         padding: const EdgeInsets.only(right: 32),
                         child: Align(
@@ -510,7 +511,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 ], // end inner Column children
               ), // end inner Column
             ), // end DecoratedBox
-          ), // end Expanded(flex:2) editor zone
+            ), // end ClipRect
+          ), // end Expanded(flex:4) editor zone
 
             // ── ZONE B: Keyboard (dark background) ─────────────────────────
             if (!isSystemKeyboardVisible) ...[

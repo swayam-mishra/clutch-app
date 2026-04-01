@@ -1,11 +1,10 @@
 abstract final class AppConstants {
   // ---------------------------------------------------------------------------
   // API
-  // NOTE: 10.0.2.2 is the Android emulator loopback to the host machine.
-  // For USB debugging on a physical device, change this to your machine's
-  // local IP address (e.g. 'http://192.168.1.X:3001/api').
+  // Production: Render deployment.
+  // For local dev, swap to your machine's LAN IP: 'http://192.168.x.x:3001/api'
   // ---------------------------------------------------------------------------
-  static const String apiBaseUrl = 'http://10.6.48.170:3001/api';
+  static const String apiBaseUrl = 'https://clutch-backend-hwu8.onrender.com/api';
 
   // Secure storage keys
   static const String accessTokenKey = 'access_token';
